@@ -1,3 +1,4 @@
+//#define GLAD_GLAPI_EXPORT
 //#include <glad/glad.h>
 //#include <GLFW/glfw3.h>
 //#include <stdlib.h>
@@ -13,10 +14,14 @@
 //#define STB_IMAGE_IMPLEMENTATION
 //#include "stb_image.h"
 //
+//// =============== PROFILING CONFIG ===============
+//#define PROFILING_MODE 1  // 1 = �������������� ������������������ ������
+//// ================================================
+//
 //#define BULLETTIME 0.70
 //#define BULLETSPEED 0.01f
-//#define MAX_BULLETS 100
-//#define MAX_ENEMIES 30
+//#define MAX_BULLETS 1000
+//#define MAX_ENEMIES 250
 //
 //#define ENEMY_SIZEX 0.1f
 //#define ENEMY_SIZEY 0.1f
@@ -112,7 +117,6 @@
 //"    else\n"
 //"        FragColor = texture(texture1, TexCoords);\n"
 //"}\n";
-//// Шейдер для текста (bitmap font)
 //const char* textVertexSrc = "#version 330 core\n"
 //"layout(location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>\n"
 //"out vec2 TexCoords;\n"
@@ -140,6 +144,7 @@
 //unsigned int menuShader, textShader;
 //unsigned int fontTexture;
 //int highscores[MAX_SCORES] = { 0 };
+//long long int draw_call_count = 0;
 //
 //typedef struct {
 //    unsigned int vertexIndex;
@@ -159,7 +164,6 @@
 //    unsigned int numFaces;
 //} Model;
 //
-//
 //typedef struct Bullets
 //{
 //    float x, y;
@@ -168,6 +172,7 @@
 //    struct Bullets* next;
 //    struct Bullets* prev;
 //} Bullet;
+//
 //typedef struct
 //{
 //    float x, y, speedX, speedY;
@@ -184,7 +189,6 @@
 //
 //GameState gameState;
 //
-//
 //Bullet* head = NULL;
 //Bullet* tail = NULL;
 //Enemy enemies[MAX_ENEMIES];
@@ -200,6 +204,7 @@
 //        printf("ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
 //    }
 //}
+//
 //void delete_bullet(Bullet* cur_bullet) {
 //    if ((cur_bullet->next == NULL) && (cur_bullet->prev == NULL)) {
 //        free(cur_bullet);
@@ -222,6 +227,7 @@
 //        free(cur_bullet);
 //    }
 //}
+//
 //void shootBullet(float px)
 //{
 //    if ((glfwGetTime() - last_timebul) > 0.13)
@@ -273,14 +279,13 @@
 //    Bullet* cur_bullet = head;
 //    while (cur_bullet)
 //    {
-//
 //        glUniform3f(off, cur_bullet->x, cur_bullet->y, 0.0f);
 //        glUniformMatrix4fv(glGetUniformLocation(prog, "model"), 1, GL_FALSE, &model[0][0]);
 //        glUniformMatrix4fv(glGetUniformLocation(prog, "view"), 1, GL_FALSE, &view[0][0]);
 //        glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), 1, GL_FALSE, &projection[0][0]);
+//        draw_call_count++;
 //        glDrawArrays(GL_TRIANGLES, 0, 6);
 //        cur_bullet = cur_bullet->next;
-//
 //    }
 //}
 //
@@ -293,14 +298,12 @@
 //            head = new_bullet;
 //            tail = head;
 //            new_bullet->prev = NULL;
-//
 //        }
 //        else {
 //            tail->next = new_bullet;
 //            new_bullet->prev = tail;
 //            tail = new_bullet;
 //        }
-//
 //        new_bullet->x = ex;
 //        new_bullet->y = ey;
 //        new_bullet->dir = -1;
@@ -331,7 +334,7 @@
 //                    {
 //                        enemies[j].active = 0;
 //                        kills++;
-//                        score += baseEnemyScore + 5*wave;
+//                        score += baseEnemyScore + 5 * wave;
 //                    }
 //                }
 //                cur_bullet = temp;
@@ -350,7 +353,7 @@
 //            enemies[i].y = 0.8f - r * V_SPACING;
 //            enemies[i].speedX = ENEMY_SPEED;
 //            enemies[i].speedY = 0.0f;
-//            enemies[i].lives = 4 + 2* wave;
+//            enemies[i].lives = 4 + 2 * wave;
 //            enemies[i].active = 1;
 //            enemies[i].diving = 0;
 //            enemies[i].hit = 0;
@@ -401,7 +404,6 @@
 //            if (enemies[i].y < STARTPLY - 0.5f ||
 //                enemies[i].x < -1.0f || enemies[i].x > 1.0f)
 //            {
-//
 //                float deltaX = 0.0f;
 //                float repInitX = 0.0f;
 //                float repSpeed = ENEMY_SPEED;
@@ -470,7 +472,6 @@
 //
 //void addScore(int score) {
 //    highscores[MAX_SCORES - 1] = score;
-//    // сортировка по убыванию
 //    for (int i = MAX_SCORES - 1; i > 0; i--) {
 //        if (highscores[i] > highscores[i - 1]) {
 //            int tmp = highscores[i];
@@ -497,17 +498,20 @@
 //                kills++;
 //                score += 10;
 //                enemies[i].diving = 0;
+//#if !PROFILING_MODE
 //                if (playerHits >= PLAYER_HITS_TO_DIE) {
-//                addScore(score);
-//                saveHighscores("scores.txt");
-//                gameState = STATE_MENU;
-//                wave = 0;
-//                score = 0;
-//            }
+//                    addScore(score);
+//                    saveHighscores("scores.txt");
+//                    gameState = STATE_MENU;
+//                    wave = 0;
+//                    score = 0;
+//                }
+//#endif
 //            }
 //        }
 //    }
 //}
+//
 //void updatePlayerHits(float px)
 //{
 //    Bullet* cur_bullet = head;
@@ -521,6 +525,7 @@
 //            playerHits++;
 //            playerIsHit = 1;
 //            delete_bullet(cur_bullet);
+//#if !PROFILING_MODE
 //            if (playerHits >= PLAYER_HITS_TO_DIE)
 //            {
 //                addScore(score);
@@ -529,6 +534,7 @@
 //                score = 0;
 //                gameState = STATE_MENU;
 //            }
+//#endif
 //        }
 //        cur_bullet = temp;
 //    }
@@ -553,13 +559,14 @@
 //            glUniformMatrix4fv(glGetUniformLocation(prog, "view"), 1, GL_FALSE, &view[0][0]);
 //            glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), 1, GL_FALSE, &projection[0][0]);
 //            glBindVertexArray(VAO);
+//            draw_call_count++;
 //            glDrawArrays(GL_TRIANGLES, 0, enemymodel->numFaces);
 //            enemies[i].hit = 0;
 //        }
 //    }
 //}
 //
-//void processInput(GLFWwindow* w, float* x) // Обработка ввода
+//void processInput(GLFWwindow* w, float* x)
 //{
 //    if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //        glfwSetWindowShouldClose(w, 1);
@@ -625,7 +632,6 @@
 //    return texture;
 //}
 //
-//
 //void loadObj(const char* path, Model* obmodel, float scale, float zoffset, float ydir, float yoffset, int change) {
 //    FILE* file = fopen(path, "r");
 //    if (!file) {
@@ -641,7 +647,7 @@
 //
 //    int y = 1;
 //    int z = 2;
-//    if (change) { // Если перепутаны y и z
+//    if (change) {
 //        z = 1;
 //        y = 2;
 //    }
@@ -654,7 +660,7 @@
 //                &(obmodel->vertices[obmodel->numVertices])[y],
 //                &(obmodel->vertices[obmodel->numVertices])[z]);
 //
-//            obmodel->vertices[obmodel->numVertices][0] *= scale; // Смещения и масштаб
+//            obmodel->vertices[obmodel->numVertices][0] *= scale;
 //            obmodel->vertices[obmodel->numVertices][z] *= scale;
 //            obmodel->vertices[obmodel->numVertices][y] *= (scale * ydir);
 //            obmodel->vertices[obmodel->numVertices][1] += zoffset;
@@ -663,20 +669,17 @@
 //            obmodel->numVertices++;
 //        }
 //        else if (strncmp(line, "vt ", 3) == 0) {
-//            // Текстурная координата
 //            sscanf(line, "vt %f %f", &obmodel->texCoords[obmodel->numTexCoords][0],
 //                &obmodel->texCoords[obmodel->numTexCoords][1]);
 //            obmodel->numTexCoords++;
 //        }
 //        else if (strncmp(line, "vn ", 3) == 0) {
-//            // Нормаль
 //            sscanf(line, "vn %f %f %f", &obmodel->normals[obmodel->numNormals][0],
 //                &obmodel->normals[obmodel->numNormals][1],
 //                &obmodel->normals[obmodel->numNormals][2]);
 //            obmodel->numNormals++;
 //        }
 //        else if (strncmp(line, "f ", 2) == 0) {
-//            // Грань
 //            unsigned int v[3], vt[3], vn[3];
 //            int result = sscanf(ind, "f %u/%u/%u %u/%u/%u %u/%u/%u%n",
 //                &v[0], &vt[0], &vn[0],
@@ -684,7 +687,7 @@
 //                &v[2], &vt[2], &vn[2], &offset);
 //            ind += offset;
 //            offset = 0;
-//            for (int i = 0; i < 3; i++) { // Сборка полигонов (если после 3 вершин есть что то еще, создается несколько треугольников)
+//            for (int i = 0; i < 3; i++) {
 //                obmodel->faces[obmodel->numFaces].vertexIndex = v[i] - 1;
 //                obmodel->faces[obmodel->numFaces].uvIndex = vt[i] - 1;
 //                obmodel->faces[obmodel->numFaces].normalIndex = vn[i] - 1;
@@ -732,27 +735,23 @@
 //    glGenBuffers(1, VBO);
 //    glBindVertexArray(*VAO);
 //
-//    float* vertexData = malloc(model->numFaces * 3 * 8 * sizeof(float)); // 8 = 3 (позиция) + 2 (текстура) + 3 (нормаль)
+//    float* vertexData = malloc(model->numFaces * 3 * 8 * sizeof(float));
 //    unsigned int index = 0;
 //    for (unsigned int i = 0; i < model->numFaces; i++) {
 //        Face face = model->faces[i];
 //
-//        // Позиция
 //        vertexData[index++] = model->vertices[face.vertexIndex][0];
 //        vertexData[index++] = model->vertices[face.vertexIndex][1];
 //        vertexData[index++] = model->vertices[face.vertexIndex][2];
 //
-//        // Текстурные координаты
 //        vertexData[index++] = model->texCoords[face.uvIndex][0];
 //        vertexData[index++] = model->texCoords[face.uvIndex][1];
 //
-//        // Нормали
 //        vertexData[index++] = model->normals[face.normalIndex][0];
 //        vertexData[index++] = model->normals[face.normalIndex][1];
 //        vertexData[index++] = model->normals[face.normalIndex][2];
 //    }
 //
-//    // Загрузка данных вершин в VBO
 //    glBindBuffer(GL_ARRAY_BUFFER, *VBO);
 //    glBufferData(GL_ARRAY_BUFFER, model->numFaces * 3 * 8 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
 //    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
@@ -798,7 +797,6 @@
 //    fontTexture = loadTexture("res/font.png");
 //}
 //
-//// Рендер строкового текста в NDC
 //void renderText(const char* text, float x, float y, float scale) {
 //    glUseProgram(textShader);
 //    glActiveTexture(GL_TEXTURE0);
@@ -826,6 +824,7 @@
 //        };
 //        glBindBuffer(GL_ARRAY_BUFFER, VBO_text);
 //        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+//        draw_call_count++;
 //        glDrawArrays(GL_TRIANGLES, 0, 6);
 //        xpos += w;
 //    }
@@ -851,7 +850,6 @@
 //    renderText("CONTROLS", -0.3f, -0.175f, 1.2f);
 //    renderText("HIGHSCORES", -0.37f, -0.325f, 1.2f);
 //
-//
 //    if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
 //        gameState = STATE_PLAYING;
 //    }
@@ -862,7 +860,6 @@
 //        score = 0;
 //    }
 //
-//    // Обработка клика мышью по надписям
 //    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
 //        double mx, my;
 //        int w, h;
@@ -897,19 +894,20 @@
 //    }
 //}
 //
-//void renderGame(primprog, texture, VAO_bg) {
-//
-//    glClear(GL_COLOR_BUFFER_BIT); // Фон
+//void renderGame(unsigned int primprog, unsigned int texture, unsigned int VAO_bg) {
+//    glClear(GL_COLOR_BUFFER_BIT);
 //    glUseProgram(primprog);
 //    glBindTexture(GL_TEXTURE_2D, texture);
 //    glBindVertexArray(VAO_bg);
+//    draw_call_count++;
 //    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 //}
+//
 //int main()
 //{
 //    gameState = STATE_MENU;
 //    loadHighscores("scores.txt");
-//    glfwInit(); // Создание контекста opengl
+//    glfwInit();
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 //    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -923,14 +921,13 @@
 //        return -1;
 //    }
 //    glfwMakeContextCurrent(window);
-//    glfwSwapInterval(1);
+//    glfwSwapInterval(0);
 //    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 //        return -1;
 //    glViewport(0, 0, mode->width, mode->height);
 //
-//    mat4 model, view, projection; // Блок обработки камеры
+//    mat4 model, view, projection;
 //    glm_mat4_identity(model);
-//
 //    glm_perspective(glm_rad(45.0f), (float)(mode->width) / (float)(mode->height), 0.1f, 100.0f, projection);
 //
 //    vec3 eye = { 0.0f, -2.0f, 1.0f };
@@ -938,7 +935,7 @@
 //    vec3 up = { 0.0f, 1.0f, 1.0f };
 //    glm_lookat(eye, center, up, view);
 //
-//    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); // Блок комплиляции шейдеров
+//    unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
 //    glShaderSource(vs, 1, &vertexShaderSource, NULL);
 //    glCompileShader(vs);
 //    unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -980,8 +977,8 @@
 //    glLinkProgram(mprog);
 //    glDeleteShader(mvs);
 //    glDeleteShader(mfs);
-//    
-//    float backgroundVertices[] = { // Буфер фона и его обработка
+//
+//    float backgroundVertices[] = {
 //        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
 //        1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
 //        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -1016,7 +1013,7 @@
 //    glBindBuffer(GL_ARRAY_BUFFER, 0);
 //    glBindVertexArray(0);
 //
-//    float vb[] = { // Буффер пули и его обработка
+//    float vb[] = {
 //        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f,
 //        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f, -0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f };
 //
@@ -1033,15 +1030,14 @@
 //    glBindBuffer(GL_ARRAY_BUFFER, 0);
 //    glBindVertexArray(0);
 //
-//    Model enemymodel; // Загрузка модели врага
+//    Model enemymodel;
 //    memset(&enemymodel, 0, sizeof(Model));
 //    loadObj("res/fighter.obj", &enemymodel, .05f, 0.2f, 1.0f, -0.3f, 0);
 //    unsigned int VBO_e, VAO_e;
 //    setupModelBuffers(&enemymodel, &VAO_e, &VBO_e);
 //    unsigned int enemytexture = loadTexture("res/fighter_texture.jpg");
 //
-//
-//    Model playermodel; //Загрузка модели игрока
+//    Model playermodel;
 //    memset(&playermodel, 0, sizeof(Model));
 //    loadObj("res/SpaseShip.obj", &playermodel, .05f, -0.2f, 1.0f, -0.3f, 1);
 //    unsigned int VBO, VAO;
@@ -1053,14 +1049,74 @@
 //    spawnFormation();
 //    lastDiveTime = glfwGetTime();
 //
+//
+//#if PROFILING_MODE
+//    // === ��������������: ������������ �������� ===
+//    for (int i = 0; i < MAX_ENEMIES; i++) {
+//        enemies[i].active = 1;
+//        enemies[i].lives = 100;
+//        enemies[i].diving = 1;
+//        enemies[i].hit = 0;
+//        enemies[i].x = ((rand() % 200) / 100.0f) - 1.0f;
+//        enemies[i].y = ((rand() % 200) / 100.0f) - 0.5f;
+//    }
+//
+//    // === �������� ���� ��� ����������� ===
+//    for (int i = 0; i < MAX_BULLETS; i++) {
+//        Bullet* b = calloc(1, sizeof(Bullet));
+//        if (!head) {
+//            head = tail = b;
+//            b->prev = NULL;
+//        }
+//        else {
+//            tail->next = b;
+//            b->prev = tail;
+//            tail = b;
+//        }
+//        b->next = NULL;
+//        b->x = ((rand() % 200) / 100.0f) - 1.0f;
+//        b->y = ((rand() % 200) / 100.0f) - 1.0f;
+//        b->dir = (rand() % 2) ? 1 : -1;
+//        b->active = 1; // ���� � ����� ���� active �� ������������ � ������
+//    }
+//
+//    score = 999999;
+//    wave = 99;
+//#endif
+//
 //    compileTextShader();
 //    setupText();
-//    float x = 0.0f;
+//    const float PLAYER_X = 0.0f; // ������������� �������
+//    float x = PLAYER_X;
+//
 //    glEnable(GL_BLEND);
 //    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 //
+//    // === �������� ����� ���� ===
+//    FILE* profileLog = NULL;
+//#if PROFILING_MODE
+//    profileLog = fopen("profile_unoptimized.txt", "w");
+//    if (profileLog) {
+//        fprintf(profileLog, "Time_sec\tFPS\tFrameTime_ms\tActiveEnemies\tActiveBullets\tDrawCalls\n");
+//        fflush(profileLog);
+//    }
+//#endif
+//
+//    double lastFrameTime = glfwGetTime();
+//    double lastReportTime = lastFrameTime;
+//
 //    while (!glfwWindowShouldClose(window))
 //    {
+//        double currentTime = glfwGetTime();
+//        double deltaTime = currentTime - lastFrameTime;
+//        lastFrameTime = currentTime;
+//
+//#if !PROFILING_MODE
+//        if (gameState == STATE_PLAYING) {
+//            processInput(window, &x);
+//        }
+//#endif
+//
 //        switch (gameState) {
 //        case STATE_MENU:
 //            renderMenu(window);
@@ -1068,9 +1124,9 @@
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
 //        case STATE_PLAYING:
-//            processInput(window, &x);
-//            renderGame(primprog, texture, VAO_bg);
-//            updateEnemy(); // Блок обработки врагов и пуль
+//            draw_call_count = 0;
+//#if !PROFILING_MODE
+//            updateEnemy();
 //            updateBullets();
 //            for (int j = 0; j < MAX_ENEMIES; j++)
 //                if (enemies[j].active && rand() % 500 == 0)
@@ -1092,13 +1148,14 @@
 //                    enemyShotInterval *= 0.9f;
 //                    diveIntervalVar *= 0.9f;
 //                    spawnFormation();
-//
 //                }
-//
 //            }
+//#endif
+//
+//            renderGame(primprog, texture, VAO_bg);
 //            drawBullets(prog, VAO_b, model, view, projection);
 //
-//            glUseProgram(mprog); //Блок обработки игрока
+//            glUseProgram(mprog);
 //            int off = glGetUniformLocation(mprog, "offset");
 //            int hitLoc = glGetUniformLocation(mprog, "isHit");
 //
@@ -1114,16 +1171,12 @@
 //            glUniformMatrix4fv(glGetUniformLocation(mprog, "projection"), 1, GL_FALSE, &projection[0][0]);
 //
 //            glBindVertexArray(VAO);
+//            draw_call_count++;
 //            glDrawArrays(GL_TRIANGLES, 0, playermodel.numFaces);
 //
 //            drawEnemy(mprog, VAO_e, &enemymodel, enemytexture, model, view, projection);
 //            playerIsHit = 0;
-//            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
-//                gameState = STATE_MENU;
-//                wave = 0;
-//                spawnFormation();
-//                updateBullets();
-//            }
+//
 //            char scoreText[64];
 //            sprintf(scoreText, "Score: %d", score);
 //            GLint prevDepthFunc;
@@ -1131,22 +1184,60 @@
 //            glDepthFunc(GL_ALWAYS);
 //            renderText(scoreText, -0.95f, 0.9f, 1.0f);
 //            glDepthFunc(prevDepthFunc);
-//
 //            break;
 //        case STATE_CONTROLS:
 //            renderControls(window);
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
-//        case STATE_HIGHSCORES: 
+//        case STATE_HIGHSCORES:
 //            renderHighscores(window);
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
 //        }
+//
+//        // === ���� ���������� ===
+//#if PROFILING_MODE
+//        if (profileLog && (currentTime - lastReportTime >= 1.0)) {
+//            double fps = 1.0 / deltaTime;
+//            double frameTimeMs = deltaTime * 1000.0;
+//
+//            int activeEnemies = 0;
+//            for (int i = 0; i < MAX_ENEMIES; i++) if (enemies[i].active) activeEnemies++;
+//
+//            int activeBullets = 0;
+//            Bullet* b = head;
+//            while (b) { activeBullets++; b = b->next; }
+//
+//            // === �������� draw_call_count ===
+//            fprintf(profileLog, "%.3f\t%.2f\t%.3f\t%d\t%d\t%lld\n",
+//                currentTime,
+//                fps,
+//                frameTimeMs,
+//                activeEnemies,
+//                activeBullets,
+//                draw_call_count);
+//            fflush(profileLog);
+//            lastReportTime = currentTime;
+//        }
+//#endif
+//
 //        glfwSwapBuffers(window);
 //        glfwPollEvents();
 //    }
+//
+//#if PROFILING_MODE
+//    if (profileLog) fclose(profileLog);
+//#endif
+//
+//    // ������� ������ ����
+//    while (head) {
+//        Bullet* next = head->next;
+//        free(head);
+//        head = next;
+//    }
+//    tail = NULL;
 //
 //    glDeleteVertexArrays(1, &VAO);
 //    glDeleteBuffers(1, &VBO);

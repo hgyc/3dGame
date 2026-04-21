@@ -1,3 +1,4 @@
+//#define GLAD_GLAPI_EXPORT
 //#include <glad/glad.h>
 //#include <GLFW/glfw3.h>
 //#include <stdlib.h>
@@ -12,6 +13,10 @@
 //
 //#define STB_IMAGE_IMPLEMENTATION
 //#include "stb_image.h"
+//
+//// =============== PROFILING CONFIG ===============
+//#define PROFILING_MODE 1  // 1 = ‚ÍÎ˛˜ËÚ¸ ÔÓÙËÎËÓ‚‡ÌËÂ
+//// ================================================
 //
 //#define BULLETTIME 0.70
 //#define BULLETSPEED 0.01f
@@ -36,33 +41,34 @@
 //#define STARTPLY -0.4f
 //#define MAX_SCORES 10
 //
-//const char* vertexShaderSource = "#version 330 core\n"
+//// === ÿÂÈ‰Â˚ ===
+//const char* instancedBulletVertexShader =
+//"#version 330 core\n"
 //"layout (location = 0) in vec3 aPos;\n"
 //"layout (location = 1) in vec3 aColour;\n"
-//"uniform vec3 offset;\n"
+//"layout (location = 2) in vec3 instanceOffset;\n"
 //"uniform mat4 model;\n"
 //"uniform mat4 view;\n"
 //"uniform mat4 projection;\n"
 //"out vec3 colour;\n"
 //"void main()\n"
 //"{\n"
-//"    gl_Position = projection*view*model*vec4(aPos + offset, 1.0);\n"
+//"    vec3 pos = aPos + instanceOffset;\n"
+//"    gl_Position = projection * view * model * vec4(pos, 1.0);\n"
 //"    colour = aColour;\n"
 //"}\n";
 //
-//const char* fragmentShaderSource = "#version 330 core\n"
+//const char* bulletFragmentShader =
+//"#version 330 core\n"
 //"in vec3 colour;\n"
 //"out vec4 FragColor;\n"
-//"uniform int isHit;\n"
 //"void main()\n"
 //"{\n"
-//"    if (isHit == 1)\n"
-//"        FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
-//"    else\n"
-//"        FragColor = vec4(colour, 1.0f);\n"
+//"    FragColor = vec4(colour, 1.0f);\n"
 //"}\n";
 //
-//const char* primvetexshader = "#version 330 core\n"
+//const char* primvetexshader =
+//"#version 330 core\n"
 //"layout (location = 0) in vec3 aPos;\n"
 //"layout (location = 1) in vec2 aTexcoords;\n"
 //"out vec2 Texcoords;\n"
@@ -71,7 +77,9 @@
 //"    gl_Position = vec4(aPos, 1.0);\n"
 //"    Texcoords = aTexcoords;\n"
 //"}\n";
-//const char* primefragmentshader = "#version 330 core\n"
+//
+//const char* primefragmentshader =
+//"#version 330 core\n"
 //"in vec2 Texcoords;\n"
 //"out vec4 FragColor;\n"
 //"uniform sampler2D texture1;\n"
@@ -79,7 +87,71 @@
 //"{\n"
 //"FragColor = texture(texture1, Texcoords);\n"
 //"}\n";
-//const char* modelvertexShaderSource = "#version 330 core\n"
+//
+//const char* instancedEnemyVertexShader =
+//"#version 330 core\n"
+//"layout (location = 0) in vec3 aPos;\n"
+//"layout (location = 1) in vec2 aTexCoords;\n"
+//"layout (location = 2) in vec3 aNormal;\n"
+//"layout (location = 3) in vec3 instanceOffset;\n"
+//"layout (location = 4) in int instanceIsHit;\n"
+//"uniform mat4 model;\n"
+//"uniform mat4 view;\n"
+//"uniform mat4 projection;\n"
+//"out vec2 TexCoords;\n"
+//"out vec3 Normal;\n"
+//"out vec3 FragPos;\n"
+//"flat out int isHit;\n"
+//"void main()\n"
+//"{\n"
+//"    vec3 worldPos = aPos + instanceOffset;\n"
+//"    FragPos = vec3(model * vec4(worldPos, 1.0));\n"
+//"    Normal = mat3(transpose(inverse(model))) * aNormal;\n"
+//"    TexCoords = aTexCoords;\n"
+//"    isHit = instanceIsHit;\n"
+//"    gl_Position = projection * view * vec4(FragPos, 1.0);\n"
+//"}\n";
+//
+//const char* instancedEnemyFragmentShader =
+//"#version 330 core\n"
+//"in vec2 TexCoords;\n"
+//"in vec3 Normal;\n"
+//"in vec3 FragPos;\n"
+//"flat in int isHit;\n"
+//"out vec4 FragColor;\n"
+//"uniform sampler2D texture1;\n"
+//"void main()\n"
+//"{\n"
+//"    if (isHit == 1)\n"
+//"        FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
+//"    else\n"
+//"        FragColor = texture(texture1, TexCoords);\n"
+//"}\n";
+//
+//const char* textVertexSrc =
+//"#version 330 core\n"
+//"layout(location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>\n"
+//"out vec2 TexCoords;\n"
+//"void main()\n"
+//"{\n"
+//"    gl_Position = vec4(vertex.xy, 0.0, 1.0);\n"
+//"    TexCoords = vertex.zw;\n"
+//"}\n";
+//
+//const char* textFragmentSrc =
+//"#version 330 core\n"
+//"in vec2 TexCoords;\n"
+//"out vec4 FragColor;\n"
+//"uniform sampler2D font;\n"
+//"void main()\n"
+//"{\n"
+//"    float alpha = texture(font, TexCoords).r;\n"
+//"    FragColor = vec4(1.0, 1.0, 1.0, alpha);\n"
+//"}\n";
+//
+//// ========== ÿ≈…ƒ≈–€ ƒÀﬂ »√–Œ ¿ (ËÒÔ‡‚ÎÂÌÓ) ==========
+//const char* modelvertexShaderSource =
+//"#version 330 core\n"
 //"layout (location = 0) in vec3 aPos;\n"
 //"layout (location = 1) in vec2 aTexCoords;\n"
 //"layout (location = 2) in vec3 aNormal;\n"
@@ -92,44 +164,29 @@
 //"out vec3 FragPos;\n"
 //"void main()\n"
 //"{\n"
-//"FragPos = vec3(model * vec4(aPos + offset, 1.0));\n"
-//"Normal = mat3(transpose(inverse(model))) * aNormal;\n"
-//"TexCoords = aTexCoords;\n"
-//"gl_Position = projection * view * vec4(FragPos, 1.0);\n"
+//"    vec3 worldPos = aPos + offset;\n"
+//"    FragPos = vec3(model * vec4(worldPos, 1.0));\n"
+//"    Normal = mat3(transpose(inverse(model))) * aNormal;\n"
+//"    TexCoords = aTexCoords;\n"
+//"    gl_Position = projection * view * vec4(FragPos, 1.0);\n"
 //"}\n";
 //
-//const char* modelfragmentShaderSource = "#version 330 core\n"
+//const char* modelfragmentShaderSource =
+//"#version 330 core\n"
 //"in vec2 TexCoords;\n"
 //"in vec3 Normal;\n"
 //"in vec3 FragPos;\n"
 //"out vec4 FragColor;\n"
-//"uniform int isHit;\n"
 //"uniform sampler2D texture1;\n"
+//"uniform int isHit;\n"
 //"void main()\n"
 //"{\n"
 //"    if (isHit == 1)\n"
-//"        FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n"
+//"        FragColor = vec4(1.0, 0.0, 0.0, 1.0);\n"
 //"    else\n"
 //"        FragColor = texture(texture1, TexCoords);\n"
 //"}\n";
-//// –®–µ–π–¥–µ—Ä –¥–ª—è —Ç–µ–∫—Å—Ç–∞ (bitmap font)
-//const char* textVertexSrc = "#version 330 core\n"
-//"layout(location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>\n"
-//"out vec2 TexCoords;\n"
-//"void main()\n"
-//"{\n"
-//"    gl_Position = vec4(vertex.xy, 0.0, 1.0);\n"
-//"    TexCoords = vertex.zw;\n"
-//"}\n";
-//const char* textFragmentSrc = "#version 330 core\n"
-//"in vec2 TexCoords;\n"
-//"out vec4 FragColor;\n"
-//"uniform sampler2D font;\n"
-//"void main()\n"
-//"{\n"
-//"    float alpha = texture(font, TexCoords).r;\n"
-//"    FragColor = vec4(1.0, 1.0, 1.0, alpha);\n"
-//"}\n";
+//// ===================================================
 //
 //float last_timebul = 0, last_enemy_shot = 0, lastDiveTime = 0;
 //float enemyShotInterval = 2.0f;
@@ -140,6 +197,19 @@
 //unsigned int menuShader, textShader;
 //unsigned int fontTexture;
 //int highscores[MAX_SCORES] = { 0 };
+//long long int draw_call_count = 0;
+//
+//// ========== DOUBLE BUFFERING STRUCTURES ==========
+//typedef struct {
+//    GLuint buffers[2];
+//    int currentBuffer;
+//    float* mappedData;
+//    GLsync fences[2];
+//} DoubleBuffer;
+//
+//DoubleBuffer bulletDoubleBuffer;
+//DoubleBuffer enemyDoubleBuffer;
+//// ================================================
 //
 //typedef struct {
 //    unsigned int vertexIndex;
@@ -152,24 +222,19 @@
 //    vec2* texCoords;
 //    vec3* normals;
 //    Face* faces;
-//
 //    unsigned int numVertices;
 //    unsigned int numTexCoords;
 //    unsigned int numNormals;
 //    unsigned int numFaces;
 //} Model;
 //
-//
-//typedef struct Bullets
-//{
+//typedef struct Bullets {
 //    float x, y;
 //    char active;
 //    char dir;
-//    struct Bullets* next;
-//    struct Bullets* prev;
 //} Bullet;
-//typedef struct
-//{
+//
+//typedef struct {
 //    float x, y, speedX, speedY;
 //    int lives;
 //    char active, diving, hit;
@@ -184,10 +249,69 @@
 //
 //GameState gameState;
 //
+//Bullet bullets[MAX_BULLETS] = { 0 };
+//int bulletCount = 0;
 //
-//Bullet* head = NULL;
-//Bullet* tail = NULL;
 //Enemy enemies[MAX_ENEMIES];
+//
+//// === √ÎÓ·‡Î¸Ì˚Â ‰Îˇ ËÌÒÚ‡ÌÒËÌ„‡ ===
+//unsigned int bulletShader;
+//unsigned int VAO_b, VBO_b;
+//
+//unsigned int enemyShader;
+//unsigned int enemyVAO, enemyVBO;
+//Model enemymodel;
+//
+//// ƒÎˇ Ë„ÓÍ‡
+//unsigned int playerShader;
+//unsigned int playerVAO, playerVBO;
+//Model playermodel;
+//
+//// ========== DOUBLE BUFFERING FUNCTIONS ==========
+//void initDoubleBuffer(DoubleBuffer* db, GLsizeiptr size) {
+//    glGenBuffers(2, db->buffers);
+//    for (int i = 0; i < 2; i++) {
+//        glBindBuffer(GL_ARRAY_BUFFER, db->buffers[i]);
+//        glBufferData(GL_ARRAY_BUFFER, size, NULL, GL_STREAM_DRAW);
+//        db->fences[i] = 0;
+//    }
+//    db->currentBuffer = 0;
+//    db->mappedData = NULL;
+//}
+//
+//void beginDoubleBufferUpdate(DoubleBuffer* db) {
+//    // ∆‰ÂÏ, ÔÓÍ‡ ÔÂ‰˚‰Û˘ËÈ ÙÂÈÏ Á‡ÍÓÌ˜ËÚ ËÒÔÓÎ¸ÁÓ‚‡Ú¸ ˝ÚÓÚ ·ÛÙÂ
+//    if (db->fences[db->currentBuffer]) {
+//        glClientWaitSync(db->fences[db->currentBuffer], 0, GL_TIMEOUT_IGNORED);
+//        glDeleteSync(db->fences[db->currentBuffer]);
+//    }
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, db->buffers[db->currentBuffer]);
+//    db->mappedData = (float*)glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
+//}
+//
+//void endDoubleBufferUpdate(DoubleBuffer* db) {
+//    if (db->mappedData) {
+//        glUnmapBuffer(GL_ARRAY_BUFFER);
+//        db->mappedData = NULL;
+//    }
+//
+//    // ”ÒÚ‡Ì‡‚ÎË‚‡ÂÏ fence ‰Îˇ ÒËÌıÓÌËÁ‡ˆËË
+//    db->fences[db->currentBuffer] = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
+//
+//    // œÂÂÍÎ˛˜‡ÂÏÒˇ Ì‡ ÒÎÂ‰Û˛˘ËÈ ·ÛÙÂ
+//    db->currentBuffer = (db->currentBuffer + 1) % 2;
+//}
+//
+//void cleanupDoubleBuffer(DoubleBuffer* db) {
+//    for (int i = 0; i < 2; i++) {
+//        if (db->fences[i]) {
+//            glDeleteSync(db->fences[i]);
+//        }
+//    }
+//    glDeleteBuffers(2, db->buffers);
+//}
+//// ================================================
 //
 //void checkShaderCompileErrors(unsigned int shader)
 //{
@@ -200,141 +324,107 @@
 //        printf("ERROR::SHADER::COMPILATION_FAILED\n%s\n", infoLog);
 //    }
 //}
-//void delete_bullet(Bullet* cur_bullet) {
-//    if ((cur_bullet->next == NULL) && (cur_bullet->prev == NULL)) {
-//        free(cur_bullet);
-//        tail = NULL;
-//        head = NULL;
-//    }
-//    else if (cur_bullet->prev == NULL) {
-//        cur_bullet->next->prev = NULL;
-//        head = cur_bullet->next;
-//        free(cur_bullet);
-//    }
-//    else if (cur_bullet->next == NULL) {
-//        cur_bullet->prev->next = NULL;
-//        tail = cur_bullet->prev;
-//        free(cur_bullet);
-//    }
-//    else {
-//        cur_bullet->prev->next = cur_bullet->next;
-//        cur_bullet->next->prev = cur_bullet->prev;
-//        free(cur_bullet);
-//    }
-//}
+//
 //void shootBullet(float px)
 //{
-//    if ((glfwGetTime() - last_timebul) > 0.13)
+//    if ((glfwGetTime() - last_timebul) > 0.13 && bulletCount < MAX_BULLETS)
 //    {
-//        Bullet* new_bullet = calloc(1, sizeof(Bullet));
-//        if (!head) {
-//            head = new_bullet;
-//            tail = head;
-//            new_bullet->prev = NULL;
+//        for (int i = 0; i < MAX_BULLETS; i++) {
+//            if (!bullets[i].active) {
+//                bullets[i].x = px;
+//                bullets[i].y = STARTPLY + ENEMY_SIZEY;
+//                bullets[i].dir = 1;
+//                bullets[i].active = 1;
+//                bulletCount++;
+//                last_timebul = glfwGetTime();
+//                break;
+//            }
 //        }
-//        else {
-//            tail->next = new_bullet;
-//            new_bullet->prev = tail;
-//            tail = new_bullet;
-//        }
-//        new_bullet->x = px;
-//        new_bullet->y = STARTPLY + ENEMY_SIZEY;
-//        new_bullet->dir = 1;
-//        new_bullet->next = NULL;
-//        last_timebul = glfwGetTime();
 //    }
 //}
 //
 //void updateBullets()
 //{
-//    if (!head) {
-//        return;
-//    }
-//    Bullet* cur_bullet = head;
-//    Bullet* temp = NULL;
-//    while (1)
-//    {
-//        temp = cur_bullet->next;
-//        cur_bullet->y += BULLETSPEED * cur_bullet->dir;
-//        if (fabsf(cur_bullet->y) > 1.0f)
-//            delete_bullet(cur_bullet);
-//        if (temp == NULL) {
-//            break;
+//    for (int i = 0; i < MAX_BULLETS; i++) {
+//        if (!bullets[i].active) continue;
+//        bullets[i].y += BULLETSPEED * bullets[i].dir;
+//        if (fabsf(bullets[i].y) > 1.0f) {
+//            bullets[i].active = 0;
+//            bulletCount--;
 //        }
-//        cur_bullet = temp;
 //    }
 //}
 //
-//void drawBullets(unsigned int prog, unsigned int VAO, mat4 model, mat4 view, mat4 projection)
+//void drawBullets(mat4 model, mat4 view, mat4 projection)
 //{
-//    glUseProgram(prog);
-//    glBindVertexArray(VAO);
-//    int off = glGetUniformLocation(prog, "offset");
-//    Bullet* cur_bullet = head;
-//    while (cur_bullet)
-//    {
+//    int instanceCount = 0;
 //
-//        glUniform3f(off, cur_bullet->x, cur_bullet->y, 0.0f);
-//        glUniformMatrix4fv(glGetUniformLocation(prog, "model"), 1, GL_FALSE, &model[0][0]);
-//        glUniformMatrix4fv(glGetUniformLocation(prog, "view"), 1, GL_FALSE, &view[0][0]);
-//        glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), 1, GL_FALSE, &projection[0][0]);
-//        glDrawArrays(GL_TRIANGLES, 0, 6);
-//        cur_bullet = cur_bullet->next;
+//    beginDoubleBufferUpdate(&bulletDoubleBuffer);
+//    float* offsets = bulletDoubleBuffer.mappedData;
 //
+//    for (int i = 0; i < MAX_BULLETS; i++) {
+//        if (bullets[i].active) {
+//            offsets[instanceCount * 3 + 0] = bullets[i].x;
+//            offsets[instanceCount * 3 + 1] = bullets[i].y;
+//            offsets[instanceCount * 3 + 2] = 0.0f;
+//            instanceCount++;
+//        }
 //    }
+//
+//    endDoubleBufferUpdate(&bulletDoubleBuffer);
+//
+//    if (instanceCount == 0) return;
+//
+//    // »ÒÔÓÎ¸ÁÛÂÏ ÔÂ‰˚‰Û˘ËÈ ·ÛÙÂ (ÍÓÚÓ˚È ÛÊÂ „ÓÚÓ‚)
+//    int renderBuffer = (bulletDoubleBuffer.currentBuffer + 1) % 2;
+//    glBindBuffer(GL_ARRAY_BUFFER, bulletDoubleBuffer.buffers[renderBuffer]);
+//
+//    glUseProgram(bulletShader);
+//    glUniformMatrix4fv(glGetUniformLocation(bulletShader, "model"), 1, GL_FALSE, &model[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(bulletShader, "view"), 1, GL_FALSE, &view[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(bulletShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+//
+//    glBindVertexArray(VAO_b);
+//    draw_call_count++;
+//    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instanceCount);
+//    glBindVertexArray(0);
 //}
 //
 //void shootEnemyBullet(float ex, float ey, float interval)
 //{
-//    if ((glfwGetTime() - last_enemy_shot) > interval)
+//    if ((glfwGetTime() - last_enemy_shot) > interval && bulletCount < MAX_BULLETS)
 //    {
-//        Bullet* new_bullet = calloc(1, sizeof(Bullet));
-//        if (!head) {
-//            head = new_bullet;
-//            tail = head;
-//            new_bullet->prev = NULL;
-//
+//        for (int i = 0; i < MAX_BULLETS; i++) {
+//            if (!bullets[i].active) {
+//                bullets[i].x = ex;
+//                bullets[i].y = ey;
+//                bullets[i].dir = -1;
+//                bullets[i].active = 1;
+//                bulletCount++;
+//                last_enemy_shot = glfwGetTime();
+//                break;
+//            }
 //        }
-//        else {
-//            tail->next = new_bullet;
-//            new_bullet->prev = tail;
-//            tail = new_bullet;
-//        }
-//
-//        new_bullet->x = ex;
-//        new_bullet->y = ey;
-//        new_bullet->dir = -1;
-//        new_bullet->next = NULL;
-//        last_enemy_shot = glfwGetTime();
 //    }
 //}
 //
 //void updateEnemy()
 //{
-//    Bullet* cur_bullet = head;
-//    Bullet* temp = NULL;
-//    for (int j = 0; j < MAX_ENEMIES; j++)
-//    {
-//        cur_bullet = head;
-//        if (enemies[j].active)
-//        {
-//            while (cur_bullet != NULL)
-//            {
-//                temp = cur_bullet->next;
-//                if ((fabs(cur_bullet->x - enemies[j].x) <= ENEMY_SIZEX) &&
-//                    (fabs(cur_bullet->y - enemies[j].y) <= ENEMY_SIZEY) && (cur_bullet->dir == 1))
-//                {
-//                    enemies[j].lives--;
-//                    delete_bullet(cur_bullet);
-//                    enemies[j].hit = 1;
-//                    if (enemies[j].lives == 0)
-//                    {
-//                        enemies[j].active = 0;
-//                        kills++;
-//                        score += baseEnemyScore + 5*wave;
-//                    }
+//    for (int j = 0; j < MAX_ENEMIES; j++) {
+//        if (!enemies[j].active) continue;
+//        for (int i = 0; i < MAX_BULLETS; i++) {
+//            if (!bullets[i].active || bullets[i].dir != 1) continue;
+//            if ((fabs(bullets[i].x - enemies[j].x) <= ENEMY_SIZEX) &&
+//                (fabs(bullets[i].y - enemies[j].y) <= ENEMY_SIZEY)) {
+//                enemies[j].lives--;
+//                bullets[i].active = 0;
+//                bulletCount--;
+//                enemies[j].hit = 1;
+//                if (enemies[j].lives == 0) {
+//                    enemies[j].active = 0;
+//                    kills++;
+//                    score += baseEnemyScore + 5 * wave;
 //                }
-//                cur_bullet = temp;
 //            }
 //        }
 //    }
@@ -350,7 +440,7 @@
 //            enemies[i].y = 0.8f - r * V_SPACING;
 //            enemies[i].speedX = ENEMY_SPEED;
 //            enemies[i].speedY = 0.0f;
-//            enemies[i].lives = 4 + 2* wave;
+//            enemies[i].lives = 4 + 2 * wave;
 //            enemies[i].active = 1;
 //            enemies[i].diving = 0;
 //            enemies[i].hit = 0;
@@ -401,7 +491,6 @@
 //            if (enemies[i].y < STARTPLY - 0.5f ||
 //                enemies[i].x < -1.0f || enemies[i].x > 1.0f)
 //            {
-//
 //                float deltaX = 0.0f;
 //                float repInitX = 0.0f;
 //                float repSpeed = ENEMY_SPEED;
@@ -470,7 +559,6 @@
 //
 //void addScore(int score) {
 //    highscores[MAX_SCORES - 1] = score;
-//    // —Å–æ—Ä—Ç–∏—Ä–æ–≤–∫–∞ –ø–æ —É–±—ã–≤–∞–Ω–∏—é
 //    for (int i = MAX_SCORES - 1; i > 0; i--) {
 //        if (highscores[i] > highscores[i - 1]) {
 //            int tmp = highscores[i];
@@ -497,30 +585,31 @@
 //                kills++;
 //                score += 10;
 //                enemies[i].diving = 0;
+//#if !PROFILING_MODE
 //                if (playerHits >= PLAYER_HITS_TO_DIE) {
-//                addScore(score);
-//                saveHighscores("scores.txt");
-//                gameState = STATE_MENU;
-//                wave = 0;
-//                score = 0;
-//            }
+//                    addScore(score);
+//                    saveHighscores("scores.txt");
+//                    gameState = STATE_MENU;
+//                    wave = 0;
+//                    score = 0;
+//                }
+//#endif
 //            }
 //        }
 //    }
 //}
+//
 //void updatePlayerHits(float px)
 //{
-//    Bullet* cur_bullet = head;
-//    Bullet* temp = NULL;
-//    while (cur_bullet != NULL)
-//    {
-//        temp = cur_bullet->next;
-//        if ((fabs(cur_bullet->x - px) <= PLAYER_COLLIDE_RX) &&
-//            (fabs(cur_bullet->y - STARTPLY) <= PLAYER_COLLIDE_RY) && (cur_bullet->dir == -1))
-//        {
+//    for (int i = 0; i < MAX_BULLETS; i++) {
+//        if (!bullets[i].active || bullets[i].dir != -1) continue;
+//        if ((fabs(bullets[i].x - px) <= PLAYER_COLLIDE_RX) &&
+//            (fabs(bullets[i].y - STARTPLY) <= PLAYER_COLLIDE_RY)) {
 //            playerHits++;
 //            playerIsHit = 1;
-//            delete_bullet(cur_bullet);
+//            bullets[i].active = 0;
+//            bulletCount--;
+//#if !PROFILING_MODE
 //            if (playerHits >= PLAYER_HITS_TO_DIE)
 //            {
 //                addScore(score);
@@ -529,37 +618,73 @@
 //                score = 0;
 //                gameState = STATE_MENU;
 //            }
+//#endif
 //        }
-//        cur_bullet = temp;
 //    }
 //}
 //
-//void drawEnemy(unsigned int prog, unsigned int VAO, Model* enemymodel, unsigned int texture, mat4 model, mat4 view, mat4 projection)
+//void drawEnemiesInstanced(unsigned int texture, mat4 model, mat4 view, mat4 projection)
 //{
-//    glUseProgram(prog);
-//    glBindVertexArray(VAO);
-//    int off = glGetUniformLocation(prog, "offset");
-//    int hitLoc = glGetUniformLocation(prog, "isHit");
-//    for (int i = 0; i < MAX_ENEMIES; i++)
-//    {
-//        if (enemies[i].active)
-//        {
-//            glUniform3f(off, enemies[i].x, enemies[i].y, 0.0f);
-//            glUniform1i(hitLoc, enemies[i].hit);
-//            glActiveTexture(GL_TEXTURE0);
-//            glBindTexture(GL_TEXTURE_2D, texture);
-//            glUniform1i(glGetUniformLocation(prog, "texture1"), 0);
-//            glUniformMatrix4fv(glGetUniformLocation(prog, "model"), 1, GL_FALSE, &model[0][0]);
-//            glUniformMatrix4fv(glGetUniformLocation(prog, "view"), 1, GL_FALSE, &view[0][0]);
-//            glUniformMatrix4fv(glGetUniformLocation(prog, "projection"), 1, GL_FALSE, &projection[0][0]);
-//            glBindVertexArray(VAO);
-//            glDrawArrays(GL_TRIANGLES, 0, enemymodel->numFaces);
-//            enemies[i].hit = 0;
-//        }
+//    int instanceCount = 0;
+//
+//    beginDoubleBufferUpdate(&enemyDoubleBuffer);
+//    char* instanceData = (char*)enemyDoubleBuffer.mappedData;
+//
+//    for (int i = 0; i < MAX_ENEMIES; i++) {
+//        if (!enemies[i].active) continue;
+//        float* offset = (float*)(instanceData + instanceCount * 16);
+//        int* isHit = (int*)(instanceData + instanceCount * 16 + 12);
+//        offset[0] = enemies[i].x;
+//        offset[1] = enemies[i].y;
+//        offset[2] = 0.0f;
+//        *isHit = enemies[i].hit;
+//        instanceCount++;
+//    }
+//
+//    endDoubleBufferUpdate(&enemyDoubleBuffer);
+//
+//    if (instanceCount == 0) return;
+//
+//    // »ÒÔÓÎ¸ÁÛÂÏ ÔÂ‰˚‰Û˘ËÈ ·ÛÙÂ (ÍÓÚÓ˚È ÛÊÂ „ÓÚÓ‚)
+//    int renderBuffer = (enemyDoubleBuffer.currentBuffer + 1) % 2;
+//    glBindBuffer(GL_ARRAY_BUFFER, enemyDoubleBuffer.buffers[renderBuffer]);
+//
+//    glUseProgram(enemyShader);
+//    glActiveTexture(GL_TEXTURE0);
+//    glBindTexture(GL_TEXTURE_2D, texture);
+//    glUniform1i(glGetUniformLocation(enemyShader, "texture1"), 0);
+//    glUniformMatrix4fv(glGetUniformLocation(enemyShader, "model"), 1, GL_FALSE, &model[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(enemyShader, "view"), 1, GL_FALSE, &view[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(enemyShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+//
+//    glBindVertexArray(enemyVAO);
+//    draw_call_count++;
+//    glDrawArraysInstanced(GL_TRIANGLES, 0, enemymodel.numFaces, instanceCount);
+//    glBindVertexArray(0);
+//
+//    for (int i = 0; i < MAX_ENEMIES; i++) {
+//        enemies[i].hit = 0;
 //    }
 //}
 //
-//void processInput(GLFWwindow* w, float* x) // –û–±—Ä–∞–±–æ—Ç–∫–∞ –≤–≤–æ–¥–∞
+//void drawPlayer(unsigned int texture, float x, mat4 model, mat4 view, mat4 projection)
+//{
+//    glUseProgram(playerShader);
+//    glUniform3f(glGetUniformLocation(playerShader, "offset"), x, 0.0f, 0.0f);
+//    glUniform1i(glGetUniformLocation(playerShader, "isHit"), playerIsHit);
+//    glActiveTexture(GL_TEXTURE0);
+//    glBindTexture(GL_TEXTURE_2D, texture);
+//    glUniform1i(glGetUniformLocation(playerShader, "texture1"), 0);
+//    glUniformMatrix4fv(glGetUniformLocation(playerShader, "model"), 1, GL_FALSE, &model[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(playerShader, "view"), 1, GL_FALSE, &view[0][0]);
+//    glUniformMatrix4fv(glGetUniformLocation(playerShader, "projection"), 1, GL_FALSE, &projection[0][0]);
+//    glBindVertexArray(playerVAO);
+//    draw_call_count++;
+//    glDrawArrays(GL_TRIANGLES, 0, playermodel.numFaces);
+//    glBindVertexArray(0);
+//}
+//
+//void processInput(GLFWwindow* w, float* x)
 //{
 //    if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //        glfwSetWindowShouldClose(w, 1);
@@ -625,7 +750,6 @@
 //    return texture;
 //}
 //
-//
 //void loadObj(const char* path, Model* obmodel, float scale, float zoffset, float ydir, float yoffset, int change) {
 //    FILE* file = fopen(path, "r");
 //    if (!file) {
@@ -641,7 +765,7 @@
 //
 //    int y = 1;
 //    int z = 2;
-//    if (change) { // –ï—Å–ª–∏ –ø–µ—Ä–µ–ø—É—Ç–∞–Ω—ã y –∏ z
+//    if (change) {
 //        z = 1;
 //        y = 2;
 //    }
@@ -654,7 +778,7 @@
 //                &(obmodel->vertices[obmodel->numVertices])[y],
 //                &(obmodel->vertices[obmodel->numVertices])[z]);
 //
-//            obmodel->vertices[obmodel->numVertices][0] *= scale; // –°–º–µ—â–µ–Ω–∏—è –∏ –º–∞—Å—à—Ç–∞–±
+//            obmodel->vertices[obmodel->numVertices][0] *= scale;
 //            obmodel->vertices[obmodel->numVertices][z] *= scale;
 //            obmodel->vertices[obmodel->numVertices][y] *= (scale * ydir);
 //            obmodel->vertices[obmodel->numVertices][1] += zoffset;
@@ -663,20 +787,17 @@
 //            obmodel->numVertices++;
 //        }
 //        else if (strncmp(line, "vt ", 3) == 0) {
-//            // –¢–µ–∫—Å—Ç—É—Ä–Ω–∞—è –∫–æ–æ—Ä–¥–∏–Ω–∞—Ç–∞
 //            sscanf(line, "vt %f %f", &obmodel->texCoords[obmodel->numTexCoords][0],
 //                &obmodel->texCoords[obmodel->numTexCoords][1]);
 //            obmodel->numTexCoords++;
 //        }
 //        else if (strncmp(line, "vn ", 3) == 0) {
-//            // –ù–æ—Ä–º–∞–ª—å
 //            sscanf(line, "vn %f %f %f", &obmodel->normals[obmodel->numNormals][0],
 //                &obmodel->normals[obmodel->numNormals][1],
 //                &obmodel->normals[obmodel->numNormals][2]);
 //            obmodel->numNormals++;
 //        }
 //        else if (strncmp(line, "f ", 2) == 0) {
-//            // –ì—Ä–∞–Ω—å
 //            unsigned int v[3], vt[3], vn[3];
 //            int result = sscanf(ind, "f %u/%u/%u %u/%u/%u %u/%u/%u%n",
 //                &v[0], &vt[0], &vn[0],
@@ -684,7 +805,7 @@
 //                &v[2], &vt[2], &vn[2], &offset);
 //            ind += offset;
 //            offset = 0;
-//            for (int i = 0; i < 3; i++) { // –°–±–æ—Ä–∫–∞ –ø–æ–ª–∏–≥–æ–Ω–æ–≤ (–µ—Å–ª–∏ –ø–æ—Å–ª–µ 3 –≤–µ—Ä—à–∏–Ω –µ—Å—Ç—å —á—Ç–æ —Ç–æ –µ—â–µ, —Å–æ–∑–¥–∞–µ—Ç—Å—è –Ω–µ—Å–∫–æ–ª—å–∫–æ —Ç—Ä–µ—É–≥–æ–ª—å–Ω–∏–∫–æ–≤)
+//            for (int i = 0; i < 3; i++) {
 //                obmodel->faces[obmodel->numFaces].vertexIndex = v[i] - 1;
 //                obmodel->faces[obmodel->numFaces].uvIndex = vt[i] - 1;
 //                obmodel->faces[obmodel->numFaces].normalIndex = vn[i] - 1;
@@ -727,45 +848,6 @@
 //    obmodel->numFaces = 0;
 //}
 //
-//void setupModelBuffers(Model* model, unsigned int* VAO, unsigned int* VBO) {
-//    glGenVertexArrays(1, VAO);
-//    glGenBuffers(1, VBO);
-//    glBindVertexArray(*VAO);
-//
-//    float* vertexData = malloc(model->numFaces * 3 * 8 * sizeof(float)); // 8 = 3 (–ø–æ–∑–∏—Ü–∏—è) + 2 (—Ç–µ–∫—Å—Ç—É—Ä–∞) + 3 (–Ω–æ—Ä–º–∞–ª—å)
-//    unsigned int index = 0;
-//    for (unsigned int i = 0; i < model->numFaces; i++) {
-//        Face face = model->faces[i];
-//
-//        // –ü–æ–∑–∏—Ü–∏—è
-//        vertexData[index++] = model->vertices[face.vertexIndex][0];
-//        vertexData[index++] = model->vertices[face.vertexIndex][1];
-//        vertexData[index++] = model->vertices[face.vertexIndex][2];
-//
-//        // –¢–µ–∫—Å—Ç—É—Ä–Ω—ã–µ –∫–æ–æ—Ä–¥–∏–Ω–∞—Ç—ã
-//        vertexData[index++] = model->texCoords[face.uvIndex][0];
-//        vertexData[index++] = model->texCoords[face.uvIndex][1];
-//
-//        // –ù–æ—Ä–º–∞–ª–∏
-//        vertexData[index++] = model->normals[face.normalIndex][0];
-//        vertexData[index++] = model->normals[face.normalIndex][1];
-//        vertexData[index++] = model->normals[face.normalIndex][2];
-//    }
-//
-//    // –ó–∞–≥—Ä—É–∑–∫–∞ –¥–∞–Ω–Ω—ã—Ö –≤–µ—Ä—à–∏–Ω –≤ VBO
-//    glBindBuffer(GL_ARRAY_BUFFER, *VBO);
-//    glBufferData(GL_ARRAY_BUFFER, model->numFaces * 3 * 8 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
-//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-//    glEnableVertexAttribArray(0);
-//    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-//    glEnableVertexAttribArray(1);
-//    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
-//    glEnableVertexAttribArray(2);
-//
-//    free(vertexData);
-//    glBindVertexArray(0);
-//}
-//
 //void compileTextShader() {
 //    unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
 //    glShaderSource(vs, 1, &textVertexSrc, NULL);
@@ -798,7 +880,6 @@
 //    fontTexture = loadTexture("res/font.png");
 //}
 //
-//// –†–µ–Ω–¥–µ—Ä —Å—Ç—Ä–æ–∫–æ–≤–æ–≥–æ —Ç–µ–∫—Å—Ç–∞ –≤ NDC
 //void renderText(const char* text, float x, float y, float scale) {
 //    glUseProgram(textShader);
 //    glActiveTexture(GL_TEXTURE0);
@@ -826,6 +907,7 @@
 //        };
 //        glBindBuffer(GL_ARRAY_BUFFER, VBO_text);
 //        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+//        draw_call_count++;
 //        glDrawArrays(GL_TRIANGLES, 0, 6);
 //        xpos += w;
 //    }
@@ -851,7 +933,6 @@
 //    renderText("CONTROLS", -0.3f, -0.175f, 1.2f);
 //    renderText("HIGHSCORES", -0.37f, -0.325f, 1.2f);
 //
-//
 //    if (glfwGetKey(window, GLFW_KEY_ENTER) == GLFW_PRESS) {
 //        gameState = STATE_PLAYING;
 //    }
@@ -862,7 +943,6 @@
 //        score = 0;
 //    }
 //
-//    // –û–±—Ä–∞–±–æ—Ç–∫–∞ –∫–ª–∏–∫–∞ –º—ã—à—å—é –ø–æ –Ω–∞–¥–ø–∏—Å—è–º
 //    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
 //        double mx, my;
 //        int w, h;
@@ -897,19 +977,20 @@
 //    }
 //}
 //
-//void renderGame(primprog, texture, VAO_bg) {
-//
-//    glClear(GL_COLOR_BUFFER_BIT); // –§–æ–Ω
+//void renderGame(unsigned int primprog, unsigned int texture, unsigned int VAO_bg) {
+//    glClear(GL_COLOR_BUFFER_BIT);
 //    glUseProgram(primprog);
 //    glBindTexture(GL_TEXTURE_2D, texture);
 //    glBindVertexArray(VAO_bg);
+//    draw_call_count++;
 //    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 //}
+//
 //int main()
 //{
 //    gameState = STATE_MENU;
 //    loadHighscores("scores.txt");
-//    glfwInit(); // –°–æ–∑–¥–∞–Ω–∏–µ –∫–æ–Ω—Ç–µ–∫—Å—Ç–∞ opengl
+//    glfwInit();
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 //    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -928,9 +1009,8 @@
 //        return -1;
 //    glViewport(0, 0, mode->width, mode->height);
 //
-//    mat4 model, view, projection; // –ë–ª–æ–∫ –æ–±—Ä–∞–±–æ—Ç–∫–∏ –∫–∞–º–µ—Ä—ã
+//    mat4 model, view, projection;
 //    glm_mat4_identity(model);
-//
 //    glm_perspective(glm_rad(45.0f), (float)(mode->width) / (float)(mode->height), 0.1f, 100.0f, projection);
 //
 //    vec3 eye = { 0.0f, -2.0f, 1.0f };
@@ -938,19 +1018,7 @@
 //    vec3 up = { 0.0f, 1.0f, 1.0f };
 //    glm_lookat(eye, center, up, view);
 //
-//    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); // –ë–ª–æ–∫ –∫–æ–º–ø–ª–∏–ª—è—Ü–∏–∏ —à–µ–π–¥–µ—Ä–æ–≤
-//    glShaderSource(vs, 1, &vertexShaderSource, NULL);
-//    glCompileShader(vs);
-//    unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
-//    glShaderSource(fs, 1, &fragmentShaderSource, NULL);
-//    glCompileShader(fs);
-//    unsigned int prog = glCreateProgram();
-//    glAttachShader(prog, vs);
-//    glAttachShader(prog, fs);
-//    glLinkProgram(prog);
-//    glDeleteShader(vs);
-//    glDeleteShader(fs);
-//
+//    // === ‘ÓÌÓ‚˚È ¯ÂÈ‰Â ===
 //    unsigned int pvs = glCreateShader(GL_VERTEX_SHADER);
 //    glShaderSource(pvs, 1, &primvetexshader, NULL);
 //    glCompileShader(pvs);
@@ -966,6 +1034,176 @@
 //    glDeleteShader(pvs);
 //    glDeleteShader(pfs);
 //
+//    // === ‘ÓÌ ===
+//    float backgroundVertices[] = {
+//        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
+//        1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+//        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+//        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f
+//    };
+//    unsigned int indices[] = { 0, 1, 3, 1, 2, 3 };
+//    unsigned int texture = loadTexture("res/back.png");
+//    unsigned int VBO_bg, VAO_bg, EBO;
+//    glGenVertexArrays(1, &VAO_bg);
+//    glGenBuffers(1, &VBO_bg);
+//    glGenBuffers(1, &EBO);
+//    glBindVertexArray(VAO_bg);
+//    glBindBuffer(GL_ARRAY_BUFFER, VBO_bg);
+//    glBufferData(GL_ARRAY_BUFFER, sizeof(backgroundVertices), backgroundVertices, GL_STATIC_DRAW);
+//    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+//    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
+//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+//    glEnableVertexAttribArray(0);
+//    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+//    glEnableVertexAttribArray(1);
+//    glBindBuffer(GL_ARRAY_BUFFER, 0);
+//    glBindVertexArray(0);
+//
+//    // === œÛÎË ===
+//    float vb[] = {
+//        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f,
+//         0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f,
+//         0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f,
+//        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f,
+//         0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f,
+//        -0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f
+//    };
+//
+//    glGenVertexArrays(1, &VAO_b);
+//    glGenBuffers(1, &VBO_b);
+//    glBindVertexArray(VAO_b);
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, VBO_b);
+//    glBufferData(GL_ARRAY_BUFFER, sizeof(vb), vb, GL_STATIC_DRAW);
+//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+//    glEnableVertexAttribArray(0);
+//    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+//    glEnableVertexAttribArray(1);
+//
+//    // »ÌËˆË‡ÎËÁ‡ˆËˇ double buffering ‰Îˇ ÔÛÎ¸
+//    initDoubleBuffer(&bulletDoubleBuffer, MAX_BULLETS * 3 * sizeof(float));
+//    glBindBuffer(GL_ARRAY_BUFFER, bulletDoubleBuffer.buffers[0]);
+//    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+//    glEnableVertexAttribArray(2);
+//    glVertexAttribDivisor(2, 1);
+//
+//    glBindVertexArray(0);
+//
+//    // === ÿÂÈ‰Â ÔÛÎ¸ ===
+//    unsigned int bulletVS = glCreateShader(GL_VERTEX_SHADER);
+//    glShaderSource(bulletVS, 1, &instancedBulletVertexShader, NULL);
+//    glCompileShader(bulletVS);
+//    checkShaderCompileErrors(bulletVS);
+//    unsigned int bulletFS = glCreateShader(GL_FRAGMENT_SHADER);
+//    glShaderSource(bulletFS, 1, &bulletFragmentShader, NULL);
+//    glCompileShader(bulletFS);
+//    checkShaderCompileErrors(bulletFS);
+//    bulletShader = glCreateProgram();
+//    glAttachShader(bulletShader, bulletVS);
+//    glAttachShader(bulletShader, bulletFS);
+//    glLinkProgram(bulletShader);
+//    glDeleteShader(bulletVS);
+//    glDeleteShader(bulletFS);
+//
+//    // === ÿÂÈ‰Â ‚‡„Ó‚ ===
+//    unsigned int enemyVS = glCreateShader(GL_VERTEX_SHADER);
+//    glShaderSource(enemyVS, 1, &instancedEnemyVertexShader, NULL);
+//    glCompileShader(enemyVS);
+//    checkShaderCompileErrors(enemyVS);
+//    unsigned int enemyFS = glCreateShader(GL_FRAGMENT_SHADER);
+//    glShaderSource(enemyFS, 1, &instancedEnemyFragmentShader, NULL);
+//    glCompileShader(enemyFS);
+//    checkShaderCompileErrors(enemyFS);
+//    enemyShader = glCreateProgram();
+//    glAttachShader(enemyShader, enemyVS);
+//    glAttachShader(enemyShader, enemyFS);
+//    glLinkProgram(enemyShader);
+//    glDeleteShader(enemyVS);
+//    glDeleteShader(enemyFS);
+//
+//    // === ¬‡„Ë ===
+//    memset(&enemymodel, 0, sizeof(Model));
+//    loadObj("res/fighter.obj", &enemymodel, .05f, 0.2f, 1.0f, -0.3f, 0);
+//
+//    glGenVertexArrays(1, &enemyVAO);
+//    glGenBuffers(1, &enemyVBO);
+//    glBindVertexArray(enemyVAO);
+//
+//    float* vertexData = malloc(enemymodel.numFaces * 3 * 8 * sizeof(float));
+//    unsigned int idx = 0;
+//    for (unsigned int i = 0; i < enemymodel.numFaces; i++) {
+//        Face face = enemymodel.faces[i];
+//        vertexData[idx++] = enemymodel.vertices[face.vertexIndex][0];
+//        vertexData[idx++] = enemymodel.vertices[face.vertexIndex][1];
+//        vertexData[idx++] = enemymodel.vertices[face.vertexIndex][2];
+//        vertexData[idx++] = enemymodel.texCoords[face.uvIndex][0];
+//        vertexData[idx++] = enemymodel.texCoords[face.uvIndex][1];
+//        vertexData[idx++] = enemymodel.normals[face.normalIndex][0];
+//        vertexData[idx++] = enemymodel.normals[face.normalIndex][1];
+//        vertexData[idx++] = enemymodel.normals[face.normalIndex][2];
+//    }
+//
+//    glBindBuffer(GL_ARRAY_BUFFER, enemyVBO);
+//    glBufferData(GL_ARRAY_BUFFER, enemymodel.numFaces * 3 * 8 * sizeof(float), vertexData, GL_STATIC_DRAW);
+//
+//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+//    glEnableVertexAttribArray(0);
+//    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+//    glEnableVertexAttribArray(1);
+//    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+//    glEnableVertexAttribArray(2);
+//
+//    // »ÌËˆË‡ÎËÁ‡ˆËˇ double buffering ‰Îˇ ‚‡„Ó‚
+//    initDoubleBuffer(&enemyDoubleBuffer, MAX_ENEMIES * 16);
+//    glBindBuffer(GL_ARRAY_BUFFER, enemyDoubleBuffer.buffers[0]);
+//
+//    glVertexAttribPointer(3, 3, GL_FLOAT, GL_FALSE, 16, (void*)0);
+//    glEnableVertexAttribArray(3);
+//    glVertexAttribDivisor(3, 1);
+//
+//    glVertexAttribIPointer(4, 1, GL_INT, 16, (void*)(12));
+//    glEnableVertexAttribArray(4);
+//    glVertexAttribDivisor(4, 1);
+//
+//    free(vertexData);
+//    glBindVertexArray(0);
+//
+//    unsigned int enemytexture = loadTexture("res/fighter_texture.jpg");
+//
+//    // === »„ÓÍ ===
+//    memset(&playermodel, 0, sizeof(Model));
+//    loadObj("res/SpaseShip.obj", &playermodel, .05f, -0.2f, 1.0f, -0.3f, 1);
+//
+//    glGenVertexArrays(1, &playerVAO);
+//    glGenBuffers(1, &playerVBO);
+//    glBindVertexArray(playerVAO);
+//
+//    float* playerVertexData = malloc(playermodel.numFaces * 3 * 8 * sizeof(float));
+//    idx = 0;
+//    for (unsigned int i = 0; i < playermodel.numFaces; i++) {
+//        Face face = playermodel.faces[i];
+//        playerVertexData[idx++] = playermodel.vertices[face.vertexIndex][0];
+//        playerVertexData[idx++] = playermodel.vertices[face.vertexIndex][1];
+//        playerVertexData[idx++] = playermodel.vertices[face.vertexIndex][2];
+//        playerVertexData[idx++] = playermodel.texCoords[face.uvIndex][0];
+//        playerVertexData[idx++] = playermodel.texCoords[face.uvIndex][1];
+//        playerVertexData[idx++] = playermodel.normals[face.normalIndex][0];
+//        playerVertexData[idx++] = playermodel.normals[face.normalIndex][1];
+//        playerVertexData[idx++] = playermodel.normals[face.normalIndex][2];
+//    }
+//    glBindBuffer(GL_ARRAY_BUFFER, playerVBO);
+//    glBufferData(GL_ARRAY_BUFFER, playermodel.numFaces * 3 * 8 * sizeof(float), playerVertexData, GL_STATIC_DRAW);
+//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+//    glEnableVertexAttribArray(0);
+//    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+//    glEnableVertexAttribArray(1);
+//    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(5 * sizeof(float)));
+//    glEnableVertexAttribArray(2);
+//    free(playerVertexData);
+//    glBindVertexArray(0);
+//    unsigned int shiptexture = loadTexture("res/Ship_texture.png");
+//
+//    // === ÿÂÈ‰Â Ë„ÓÍ‡ ===
 //    unsigned int mvs = glCreateShader(GL_VERTEX_SHADER);
 //    glShaderSource(mvs, 1, &modelvertexShaderSource, NULL);
 //    glCompileShader(mvs);
@@ -974,93 +1212,69 @@
 //    glShaderSource(mfs, 1, &modelfragmentShaderSource, NULL);
 //    glCompileShader(mfs);
 //    checkShaderCompileErrors(mfs);
-//    unsigned int mprog = glCreateProgram();
-//    glAttachShader(mprog, mvs);
-//    glAttachShader(mprog, mfs);
-//    glLinkProgram(mprog);
+//    playerShader = glCreateProgram();
+//    glAttachShader(playerShader, mvs);
+//    glAttachShader(playerShader, mfs);
+//    glLinkProgram(playerShader);
 //    glDeleteShader(mvs);
 //    glDeleteShader(mfs);
-//    
-//    float backgroundVertices[] = { // –ë—É—Ñ–µ—Ä —Ñ–æ–Ω–∞ –∏ –µ–≥–æ –æ–±—Ä–∞–±–æ—Ç–∫–∞
-//        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
-//        1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
-//        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
-//        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f
-//    };
-//
-//    unsigned int indices[] = {
-//        0, 1, 3,
-//        1, 2, 3
-//    };
-//
-//    unsigned int texture = loadTexture("res/back.png");
-//
-//    unsigned int VBO_bg, VAO_bg, EBO;
-//    glGenVertexArrays(1, &VAO_bg);
-//    glGenBuffers(1, &VBO_bg);
-//    glGenBuffers(1, &EBO);
-//
-//    glBindVertexArray(VAO_bg);
-//
-//    glBindBuffer(GL_ARRAY_BUFFER, VBO_bg);
-//    glBufferData(GL_ARRAY_BUFFER, sizeof(backgroundVertices), backgroundVertices, GL_STATIC_DRAW);
-//
-//    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-//    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-//
-//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-//    glEnableVertexAttribArray(0);
-//    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-//    glEnableVertexAttribArray(1);
-//
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//    glBindVertexArray(0);
-//
-//    float vb[] = { // –ë—É—Ñ—Ñ–µ—Ä –ø—É–ª–∏ –∏ –µ–≥–æ –æ–±—Ä–∞–±–æ—Ç–∫–∞
-//        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f,
-//        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f, -0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f };
-//
-//    unsigned int VBO_b, VAO_b;
-//    glGenVertexArrays(1, &VAO_b);
-//    glGenBuffers(1, &VBO_b);
-//    glBindVertexArray(VAO_b);
-//    glBindBuffer(GL_ARRAY_BUFFER, VBO_b);
-//    glBufferData(GL_ARRAY_BUFFER, sizeof(vb), vb, GL_DYNAMIC_DRAW);
-//    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
-//    glEnableVertexAttribArray(0);
-//    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-//    glEnableVertexAttribArray(1);
-//    glBindBuffer(GL_ARRAY_BUFFER, 0);
-//    glBindVertexArray(0);
-//
-//    Model enemymodel; // –ó–∞–≥—Ä—É–∑–∫–∞ –º–æ–¥–µ–ª–∏ –≤—Ä–∞–≥–∞
-//    memset(&enemymodel, 0, sizeof(Model));
-//    loadObj("res/fighter.obj", &enemymodel, .05f, 0.2f, 1.0f, -0.3f, 0);
-//    unsigned int VBO_e, VAO_e;
-//    setupModelBuffers(&enemymodel, &VAO_e, &VBO_e);
-//    unsigned int enemytexture = loadTexture("res/fighter_texture.jpg");
-//
-//
-//    Model playermodel; //–ó–∞–≥—Ä—É–∑–∫–∞ –º–æ–¥–µ–ª–∏ –∏–≥—Ä–æ–∫–∞
-//    memset(&playermodel, 0, sizeof(Model));
-//    loadObj("res/SpaseShip.obj", &playermodel, .05f, -0.2f, 1.0f, -0.3f, 1);
-//    unsigned int VBO, VAO;
-//    setupModelBuffers(&playermodel, &VAO, &VBO);
-//
-//    unsigned int shiptexture = loadTexture("res/Ship_texture.png");
 //
 //    srand((unsigned)time(NULL));
 //    spawnFormation();
 //    lastDiveTime = glfwGetTime();
 //
+//#if PROFILING_MODE
+//    for (int i = 0; i < MAX_ENEMIES; i++) {
+//        enemies[i].active = 1;
+//        enemies[i].lives = 100;
+//        enemies[i].diving = 1;
+//        enemies[i].hit = 0;
+//        enemies[i].x = ((rand() % 200) / 100.0f) - 1.0f;
+//        enemies[i].y = ((rand() % 200) / 100.0f) - 0.5f;
+//    }
+//    bulletCount = MAX_BULLETS;
+//    for (int i = 0; i < MAX_BULLETS; i++) {
+//        bullets[i].x = ((rand() % 200) / 100.0f) - 1.0f;
+//        bullets[i].y = ((rand() % 200) / 100.0f) - 1.0f;
+//        bullets[i].dir = (rand() % 2) ? 1 : -1;
+//        bullets[i].active = 1;
+//    }
+//    score = 999999;
+//    wave = 99;
+//#endif
+//
 //    compileTextShader();
 //    setupText();
-//    float x = 0.0f;
+//    const float PLAYER_X = 0.0f;
+//    float x = PLAYER_X;
 //    glEnable(GL_BLEND);
 //    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+//    glEnable(GL_DEPTH_TEST);
+//
+//    FILE* profileLog = NULL;
+//#if PROFILING_MODE
+//    profileLog = fopen("profile_fully_instanced.txt", "w");
+//    if (profileLog) {
+//        fprintf(profileLog, "Time_sec\tFPS\tFrameTime_ms\tActiveEnemies\tActiveBullets\tDrawCalls\n");
+//        fflush(profileLog);
+//    }
+//#endif
+//
+//    double lastFrameTime = glfwGetTime();
+//    double lastReportTime = lastFrameTime;
 //
 //    while (!glfwWindowShouldClose(window))
 //    {
+//        double currentTime = glfwGetTime();
+//        double deltaTime = currentTime - lastFrameTime;
+//        lastFrameTime = currentTime;
+//
+//#if !PROFILING_MODE
+//        if (gameState == STATE_PLAYING) {
+//            processInput(window, &x);
+//        }
+//#endif
+//
 //        switch (gameState) {
 //        case STATE_MENU:
 //            renderMenu(window);
@@ -1068,9 +1282,9 @@
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
 //        case STATE_PLAYING:
-//            processInput(window, &x);
-//            renderGame(primprog, texture, VAO_bg);
-//            updateEnemy(); // –ë–ª–æ–∫ –æ–±—Ä–∞–±–æ—Ç–∫–∏ –≤—Ä–∞–≥–æ–≤ –∏ –ø—É–ª—å
+//            draw_call_count = 0;
+//#if !PROFILING_MODE
+//            updateEnemy();
 //            updateBullets();
 //            for (int j = 0; j < MAX_ENEMIES; j++)
 //                if (enemies[j].active && rand() % 500 == 0)
@@ -1092,38 +1306,17 @@
 //                    enemyShotInterval *= 0.9f;
 //                    diveIntervalVar *= 0.9f;
 //                    spawnFormation();
-//
 //                }
-//
 //            }
-//            drawBullets(prog, VAO_b, model, view, projection);
+//#endif
 //
-//            glUseProgram(mprog); //–ë–ª–æ–∫ –æ–±—Ä–∞–±–æ—Ç–∫–∏ –∏–≥—Ä–æ–∫–∞
-//            int off = glGetUniformLocation(mprog, "offset");
-//            int hitLoc = glGetUniformLocation(mprog, "isHit");
-//
-//            glUniform3f(off, x, 0.0f, 0.0f);
-//            glUniform1i(hitLoc, playerIsHit);
-//
-//            glActiveTexture(GL_TEXTURE0);
-//            glBindTexture(GL_TEXTURE_2D, shiptexture);
-//            glUniform1i(glGetUniformLocation(mprog, "texture1"), 0);
-//
-//            glUniformMatrix4fv(glGetUniformLocation(mprog, "model"), 1, GL_FALSE, &model[0][0]);
-//            glUniformMatrix4fv(glGetUniformLocation(mprog, "view"), 1, GL_FALSE, &view[0][0]);
-//            glUniformMatrix4fv(glGetUniformLocation(mprog, "projection"), 1, GL_FALSE, &projection[0][0]);
-//
-//            glBindVertexArray(VAO);
-//            glDrawArrays(GL_TRIANGLES, 0, playermodel.numFaces);
-//
-//            drawEnemy(mprog, VAO_e, &enemymodel, enemytexture, model, view, projection);
+//            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+//            renderGame(primprog, texture, VAO_bg);
+//            drawBullets(model, view, projection);
+//            drawEnemiesInstanced(enemytexture, model, view, projection);
+//            drawPlayer(shiptexture, x, model, view, projection);
 //            playerIsHit = 0;
-//            if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
-//                gameState = STATE_MENU;
-//                wave = 0;
-//                spawnFormation();
-//                updateBullets();
-//            }
+//
 //            char scoreText[64];
 //            sprintf(scoreText, "Score: %d", score);
 //            GLint prevDepthFunc;
@@ -1131,34 +1324,62 @@
 //            glDepthFunc(GL_ALWAYS);
 //            renderText(scoreText, -0.95f, 0.9f, 1.0f);
 //            glDepthFunc(prevDepthFunc);
-//
 //            break;
 //        case STATE_CONTROLS:
 //            renderControls(window);
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
-//        case STATE_HIGHSCORES: 
+//        case STATE_HIGHSCORES:
 //            renderHighscores(window);
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
 //        }
+//
+//#if PROFILING_MODE
+//        if (profileLog && (currentTime - lastReportTime >= 1.0)) {
+//            double fps = 1.0 / deltaTime;
+//            double frameTimeMs = deltaTime * 1000.0;
+//            int activeEnemies = 0;
+//            for (int i = 0; i < MAX_ENEMIES; i++) if (enemies[i].active) activeEnemies++;
+//            int activeBullets = bulletCount;
+//
+//            fprintf(profileLog, "%.3f\t%.2f\t%.3f\t%d\t%d\t%lld\n",
+//                currentTime,
+//                fps,
+//                frameTimeMs,
+//                activeEnemies,
+//                activeBullets,
+//                draw_call_count);
+//            fflush(profileLog);
+//            lastReportTime = currentTime;
+//        }
+//#endif
+//
 //        glfwSwapBuffers(window);
 //        glfwPollEvents();
 //    }
 //
-//    glDeleteVertexArrays(1, &VAO);
-//    glDeleteBuffers(1, &VBO);
-//    glDeleteProgram(prog);
-//    glDeleteVertexArrays(1, &VAO_e);
-//    glDeleteBuffers(1, &VBO_e);
-//    glDeleteProgram(mprog);
+//#if PROFILING_MODE
+//    if (profileLog) fclose(profileLog);
+//#endif
+//
+//    // === Œ˜ËÒÚÍ‡ ===
+//    cleanupDoubleBuffer(&bulletDoubleBuffer);
+//    cleanupDoubleBuffer(&enemyDoubleBuffer);
+//    glDeleteVertexArrays(1, &playerVAO);
+//    glDeleteBuffers(1, &playerVBO);
+//    glDeleteProgram(playerShader);
+//    glDeleteVertexArrays(1, &VAO_b);
+//    glDeleteBuffers(1, &VBO_b);
+//    glDeleteProgram(bulletShader);
+//    glDeleteVertexArrays(1, &enemyVAO);
+//    glDeleteBuffers(1, &enemyVBO);
+//    glDeleteProgram(enemyShader);
 //    glDeleteVertexArrays(1, &VAO_bg);
 //    glDeleteBuffers(1, &VBO_bg);
 //    glDeleteProgram(primprog);
-//    glDeleteVertexArrays(1, &VAO_b);
-//    glDeleteBuffers(1, &VBO_b);
 //    glDeleteVertexArrays(1, &VAO_text);
 //    glDeleteBuffers(1, &VBO_text);
 //    freeModel(&playermodel);

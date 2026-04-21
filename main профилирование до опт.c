@@ -1,3 +1,4 @@
+//#define _CRT_SECURE_NO_WARNINGS
 //#include <glad/glad.h>
 //#include <GLFW/glfw3.h>
 //#include <stdlib.h>
@@ -17,6 +18,7 @@
 //#define BULLETSPEED 0.01f
 //#define MAX_BULLETS 100
 //#define MAX_ENEMIES 30
+//#define PROFILING_MAX_ENEMIES 500 // Максимальное количество врагов для профилирования
 //
 //#define ENEMY_SIZEX 0.1f
 //#define ENEMY_SIZEY 0.1f
@@ -112,7 +114,7 @@
 //"    else\n"
 //"        FragColor = texture(texture1, TexCoords);\n"
 //"}\n";
-//// РЁРµР№РґРµСЂ РґР»СЏ С‚РµРєСЃС‚Р° (bitmap font)
+//// Шейдер для текста (bitmap font)
 //const char* textVertexSrc = "#version 330 core\n"
 //"layout(location = 0) in vec4 vertex; // <vec2 pos, vec2 tex>\n"
 //"out vec2 TexCoords;\n"
@@ -187,7 +189,19 @@
 //
 //Bullet* head = NULL;
 //Bullet* tail = NULL;
-//Enemy enemies[MAX_ENEMIES];
+//Enemy enemies[PROFILING_MAX_ENEMIES]; // Увеличиваем размер массива для профилирования
+//
+//// --- Переменные для профилирования ---
+//double last_time = 0.0;
+//double frame_time = 0.0;
+//double render_time = 0.0;
+//double fps = 0.0;
+//int profiling_mode = 0; // 1 для профилирования, 0 для нормальной игры
+//int invulnerable_mode = 0; // 1 для неуязвимости
+//// --- /Переменные для профилирования ---
+//
+//double render_start_time = glfwGetTime(); // <-- Фиксируем "время начала рендеринга"
+////renderGame(primprog, texture, VAO_bg);    // <-- Первая операция рендеринга (фон)
 //
 //void checkShaderCompileErrors(unsigned int shader)
 //{
@@ -313,7 +327,8 @@
 //{
 //    Bullet* cur_bullet = head;
 //    Bullet* temp = NULL;
-//    for (int j = 0; j < MAX_ENEMIES; j++)
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    for (int j = 0; j < enemy_count; j++)
 //    {
 //        cur_bullet = head;
 //        if (enemies[j].active)
@@ -331,7 +346,7 @@
 //                    {
 //                        enemies[j].active = 0;
 //                        kills++;
-//                        score += baseEnemyScore + 5*wave;
+//                        score += baseEnemyScore + 5 * wave;
 //                    }
 //                }
 //                cur_bullet = temp;
@@ -342,31 +357,40 @@
 //
 //void spawnFormation()
 //{
-//    for (int r = 0; r < FORMATION_ROWS; r++)
-//        for (int c = 0; c < FORMATION_COLS; c++)
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    int rows = profiling_mode ? 10 : FORMATION_ROWS; // Увеличиваем количество рядов для профилирования
+//    int cols = profiling_mode ? 50 : FORMATION_COLS; // Увеличиваем количество колонок для профилирования
+//
+//    for (int r = 0; r < rows; r++)
+//        for (int c = 0; c < cols && (r * cols + c) < enemy_count; c++)
 //        {
-//            int i = r * FORMATION_COLS + c;
-//            enemies[i].x = -H_SPACING * (FORMATION_COLS - 1) / 2 + c * H_SPACING;
+//            int i = r * cols + c;
+//            enemies[i].x = -H_SPACING * (cols - 1) / 2 + c * H_SPACING;
 //            enemies[i].y = 0.8f - r * V_SPACING;
 //            enemies[i].speedX = ENEMY_SPEED;
 //            enemies[i].speedY = 0.0f;
-//            enemies[i].lives = 4 + 2* wave;
+//            enemies[i].lives = 4 + 2 * wave;
 //            enemies[i].active = 1;
 //            enemies[i].diving = 0;
 //            enemies[i].hit = 0;
 //        }
+//    // Обнуляем оставшиеся слоты, если врагов меньше MAX_ENEMIES
+//    for (int i = rows * cols; i < enemy_count; i++) {
+//        enemies[i].active = 0;
+//    }
 //}
 //
 //void updateEnemyMovement(float playerX)
 //{
-//    for (int j = 0; j < MAX_ENEMIES; j++)
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    for (int j = 0; j < enemy_count; j++)
 //    {
 //        if (enemies[j].active && !enemies[j].diving)
 //        {
 //            if (enemies[j].x + ENEMY_SIZEX >= SCREEN_LIMIT_X ||
 //                enemies[j].x - ENEMY_SIZEX <= -SCREEN_LIMIT_X)
 //            {
-//                for (int k = 0; k < MAX_ENEMIES; k++)
+//                for (int k = 0; k < enemy_count; k++)
 //                {
 //                    if (enemies[k].active && !enemies[k].diving)
 //                    {
@@ -378,7 +402,7 @@
 //        }
 //    }
 //
-//    for (int i = 0; i < MAX_ENEMIES; i++)
+//    for (int i = 0; i < enemy_count; i++)
 //    {
 //        if (!enemies[i].active)
 //            continue;
@@ -405,20 +429,21 @@
 //                float deltaX = 0.0f;
 //                float repInitX = 0.0f;
 //                float repSpeed = ENEMY_SPEED;
-//                for (int k = 0; k < MAX_ENEMIES; k++)
+//                for (int k = 0; k < enemy_count; k++)
 //                {
 //                    if (enemies[k].active && !enemies[k].diving)
 //                    {
-//                        int c = k % FORMATION_COLS;
-//                        repInitX = -H_SPACING * (FORMATION_COLS - 1) / 2 + c * H_SPACING;
+//                        int c = k % (profiling_mode ? 50 : FORMATION_COLS); // Соответствующее количество колонок
+//                        repInitX = -H_SPACING * ((profiling_mode ? 50 : FORMATION_COLS) - 1) / 2 + c * H_SPACING;
 //                        deltaX = enemies[k].x - repInitX;
 //                        repSpeed = enemies[k].speedX;
 //                        break;
 //                    }
 //                }
 //
-//                int r = i / FORMATION_COLS, c = i % FORMATION_COLS;
-//                float initX = -H_SPACING * (FORMATION_COLS - 1) / 2 + c * H_SPACING;
+//                int r = i / (profiling_mode ? 50 : FORMATION_COLS); // Соответствующее количество колонок
+//                int c = i % (profiling_mode ? 50 : FORMATION_COLS);
+//                float initX = -H_SPACING * ((profiling_mode ? 50 : FORMATION_COLS) - 1) / 2 + c * H_SPACING;
 //                enemies[i].x = initX + deltaX;
 //                enemies[i].y = 0.8f - r * V_SPACING;
 //                enemies[i].speedX = repSpeed;
@@ -437,8 +462,13 @@
 //{
 //    if ((glfwGetTime() - lastDiveTime) < diveIntervalVar)
 //        return;
-//    int start = (FORMATION_ROWS - 1) * FORMATION_COLS, end = start + FORMATION_COLS;
-//    int cand[FORMATION_COLS], cnt = 0;
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    int rows = profiling_mode ? 10 : FORMATION_ROWS;
+//    int cols = profiling_mode ? 50 : FORMATION_COLS;
+//    int start = (rows - 1) * cols;
+//    int end = start + cols < enemy_count ? start + cols : enemy_count; // Убедимся, что не выходим за пределы
+//    int cand[PROFILING_MAX_ENEMIES]; // Достаточно большой буфер
+//    int cnt = 0;
 //    for (int i = start; i < end; i++)
 //        if (enemies[i].active && !enemies[i].diving)
 //            cand[cnt++] = i;
@@ -470,7 +500,7 @@
 //
 //void addScore(int score) {
 //    highscores[MAX_SCORES - 1] = score;
-//    // СЃРѕСЂС‚РёСЂРѕРІРєР° РїРѕ СѓР±С‹РІР°РЅРёСЋ
+//    // сортировка по убыванию
 //    for (int i = MAX_SCORES - 1; i > 0; i--) {
 //        if (highscores[i] > highscores[i - 1]) {
 //            int tmp = highscores[i];
@@ -482,7 +512,8 @@
 //}
 //void checkDiveCollisions(float playerX)
 //{
-//    for (int i = 0; i < MAX_ENEMIES; i++)
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    for (int i = 0; i < enemy_count; i++)
 //    {
 //        if (enemies[i].active && enemies[i].diving)
 //        {
@@ -490,20 +521,22 @@
 //            float dy = enemies[i].y - STARTPLY;
 //            if ((fabsf(dx) <= PLAYER_COLLIDE_RX + ENEMY_SIZEX) && (fabsf(dy) <= PLAYER_COLLIDE_RY + ENEMY_SIZEY))
 //            {
-//                playerHits++;
+//                if (!invulnerable_mode) { // Проверяем режим неуязвимости
+//                    playerHits++;
+//                }
 //                playerIsHit = 1;
 //                enemies[i].lives = 0;
 //                enemies[i].active = 0;
 //                kills++;
 //                score += 10;
 //                enemies[i].diving = 0;
-//                if (playerHits >= PLAYER_HITS_TO_DIE) {
-//                addScore(score);
-//                saveHighscores("scores.txt");
-//                gameState = STATE_MENU;
-//                wave = 0;
-//                score = 0;
-//            }
+//                if (playerHits >= PLAYER_HITS_TO_DIE && !invulnerable_mode) { // Проверяем режим неуязвимости
+//                    addScore(score);
+//                    saveHighscores("scores.txt");
+//                    gameState = STATE_MENU;
+//                    wave = 0;
+//                    score = 0;
+//                }
 //            }
 //        }
 //    }
@@ -518,10 +551,12 @@
 //        if ((fabs(cur_bullet->x - px) <= PLAYER_COLLIDE_RX) &&
 //            (fabs(cur_bullet->y - STARTPLY) <= PLAYER_COLLIDE_RY) && (cur_bullet->dir == -1))
 //        {
-//            playerHits++;
+//            if (!invulnerable_mode) { // Проверяем режим неуязвимости
+//                playerHits++;
+//            }
 //            playerIsHit = 1;
 //            delete_bullet(cur_bullet);
-//            if (playerHits >= PLAYER_HITS_TO_DIE)
+//            if (playerHits >= PLAYER_HITS_TO_DIE && !invulnerable_mode) // Проверяем режим неуязвимости
 //            {
 //                addScore(score);
 //                saveHighscores("scores.txt");
@@ -540,7 +575,8 @@
 //    glBindVertexArray(VAO);
 //    int off = glGetUniformLocation(prog, "offset");
 //    int hitLoc = glGetUniformLocation(prog, "isHit");
-//    for (int i = 0; i < MAX_ENEMIES; i++)
+//    int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//    for (int i = 0; i < enemy_count; i++)
 //    {
 //        if (enemies[i].active)
 //        {
@@ -559,7 +595,7 @@
 //    }
 //}
 //
-//void processInput(GLFWwindow* w, float* x) // РћР±СЂР°Р±РѕС‚РєР° РІРІРѕРґР°
+//void processInput(GLFWwindow* w, float* x) // Обработка ввода
 //{
 //    if (glfwGetKey(w, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //        glfwSetWindowShouldClose(w, 1);
@@ -575,6 +611,18 @@
 //    }
 //    if (glfwGetKey(w, GLFW_KEY_SPACE) == GLFW_PRESS)
 //        shootBullet(*x);
+//    // --- Добавляем обработку клавиш для профилирования ---
+//    if (glfwGetKey(w, GLFW_KEY_F1) == GLFW_PRESS) {
+//        profiling_mode = !profiling_mode;
+//        if (profiling_mode) {
+//            // При включении профилирования, пересоздаем врагов
+//            spawnFormation();
+//        }
+//    }
+//    if (glfwGetKey(w, GLFW_KEY_F2) == GLFW_PRESS) {
+//        invulnerable_mode = !invulnerable_mode;
+//    }
+//    // --- /Добавляем обработку клавиш для профилирования ---
 //}
 //
 //unsigned int loadTexture(const char* path)
@@ -641,7 +689,7 @@
 //
 //    int y = 1;
 //    int z = 2;
-//    if (change) { // Р•СЃР»Рё РїРµСЂРµРїСѓС‚Р°РЅС‹ y Рё z
+//    if (change) { // Если перепутаны y и z
 //        z = 1;
 //        y = 2;
 //    }
@@ -654,7 +702,7 @@
 //                &(obmodel->vertices[obmodel->numVertices])[y],
 //                &(obmodel->vertices[obmodel->numVertices])[z]);
 //
-//            obmodel->vertices[obmodel->numVertices][0] *= scale; // РЎРјРµС‰РµРЅРёСЏ Рё РјР°СЃС€С‚Р°Р±
+//            obmodel->vertices[obmodel->numVertices][0] *= scale; // Смещения и масштаб
 //            obmodel->vertices[obmodel->numVertices][z] *= scale;
 //            obmodel->vertices[obmodel->numVertices][y] *= (scale * ydir);
 //            obmodel->vertices[obmodel->numVertices][1] += zoffset;
@@ -663,20 +711,20 @@
 //            obmodel->numVertices++;
 //        }
 //        else if (strncmp(line, "vt ", 3) == 0) {
-//            // РўРµРєСЃС‚СѓСЂРЅР°СЏ РєРѕРѕСЂРґРёРЅР°С‚Р°
+//            // Текстурная координата
 //            sscanf(line, "vt %f %f", &obmodel->texCoords[obmodel->numTexCoords][0],
 //                &obmodel->texCoords[obmodel->numTexCoords][1]);
 //            obmodel->numTexCoords++;
 //        }
 //        else if (strncmp(line, "vn ", 3) == 0) {
-//            // РќРѕСЂРјР°Р»СЊ
+//            // Нормаль
 //            sscanf(line, "vn %f %f %f", &obmodel->normals[obmodel->numNormals][0],
 //                &obmodel->normals[obmodel->numNormals][1],
 //                &obmodel->normals[obmodel->numNormals][2]);
 //            obmodel->numNormals++;
 //        }
 //        else if (strncmp(line, "f ", 2) == 0) {
-//            // Р“СЂР°РЅСЊ
+//            // Грань
 //            unsigned int v[3], vt[3], vn[3];
 //            int result = sscanf(ind, "f %u/%u/%u %u/%u/%u %u/%u/%u%n",
 //                &v[0], &vt[0], &vn[0],
@@ -684,7 +732,7 @@
 //                &v[2], &vt[2], &vn[2], &offset);
 //            ind += offset;
 //            offset = 0;
-//            for (int i = 0; i < 3; i++) { // РЎР±РѕСЂРєР° РїРѕР»РёРіРѕРЅРѕРІ (РµСЃР»Рё РїРѕСЃР»Рµ 3 РІРµСЂС€РёРЅ РµСЃС‚СЊ С‡С‚Рѕ С‚Рѕ РµС‰Рµ, СЃРѕР·РґР°РµС‚СЃСЏ РЅРµСЃРєРѕР»СЊРєРѕ С‚СЂРµСѓРіРѕР»СЊРЅРёРєРѕРІ)
+//            for (int i = 0; i < 3; i++) { // Сборка полигонов (если после 3 вершин есть что то еще, создается несколько треугольников)
 //                obmodel->faces[obmodel->numFaces].vertexIndex = v[i] - 1;
 //                obmodel->faces[obmodel->numFaces].uvIndex = vt[i] - 1;
 //                obmodel->faces[obmodel->numFaces].normalIndex = vn[i] - 1;
@@ -732,27 +780,27 @@
 //    glGenBuffers(1, VBO);
 //    glBindVertexArray(*VAO);
 //
-//    float* vertexData = malloc(model->numFaces * 3 * 8 * sizeof(float)); // 8 = 3 (РїРѕР·РёС†РёСЏ) + 2 (С‚РµРєСЃС‚СѓСЂР°) + 3 (РЅРѕСЂРјР°Р»СЊ)
+//    float* vertexData = malloc(model->numFaces * 3 * 8 * sizeof(float)); // 8 = 3 (позиция) + 2 (текстура) + 3 (нормаль)
 //    unsigned int index = 0;
 //    for (unsigned int i = 0; i < model->numFaces; i++) {
 //        Face face = model->faces[i];
 //
-//        // РџРѕР·РёС†РёСЏ
+//        // Позиция
 //        vertexData[index++] = model->vertices[face.vertexIndex][0];
 //        vertexData[index++] = model->vertices[face.vertexIndex][1];
 //        vertexData[index++] = model->vertices[face.vertexIndex][2];
 //
-//        // РўРµРєСЃС‚СѓСЂРЅС‹Рµ РєРѕРѕСЂРґРёРЅР°С‚С‹
+//        // Текстурные координаты
 //        vertexData[index++] = model->texCoords[face.uvIndex][0];
 //        vertexData[index++] = model->texCoords[face.uvIndex][1];
 //
-//        // РќРѕСЂРјР°Р»Рё
+//        // Нормали
 //        vertexData[index++] = model->normals[face.normalIndex][0];
 //        vertexData[index++] = model->normals[face.normalIndex][1];
 //        vertexData[index++] = model->normals[face.normalIndex][2];
 //    }
 //
-//    // Р—Р°РіСЂСѓР·РєР° РґР°РЅРЅС‹С… РІРµСЂС€РёРЅ РІ VBO
+//    // Загрузка данных вершин в VBO
 //    glBindBuffer(GL_ARRAY_BUFFER, *VBO);
 //    glBufferData(GL_ARRAY_BUFFER, model->numFaces * 3 * 8 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
 //    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
@@ -798,7 +846,7 @@
 //    fontTexture = loadTexture("res/font.png");
 //}
 //
-//// Р РµРЅРґРµСЂ СЃС‚СЂРѕРєРѕРІРѕРіРѕ С‚РµРєСЃС‚Р° РІ NDC
+//// Рендер строкового текста в NDC
 //void renderText(const char* text, float x, float y, float scale) {
 //    glUseProgram(textShader);
 //    glActiveTexture(GL_TEXTURE0);
@@ -839,6 +887,8 @@
 //    renderText("Spacebar - shoot", -0.5f, -0.1f, 1.1f);
 //    renderText("Esc - close game", -0.5f, -0.3f, 1.1f);
 //    renderText("X - back to menu", -0.5f, -0.5f, 1.1f);
+//    renderText("F1 - Toggle Profiling", -0.5f, -0.6f, 1.1f);
+//    renderText("F2 - Toggle Invulnerability", -0.5f, -0.7f, 1.1f);
 //    if (glfwGetKey(window, GLFW_KEY_X) == GLFW_PRESS) {
 //        gameState = STATE_MENU;
 //    }
@@ -862,7 +912,7 @@
 //        score = 0;
 //    }
 //
-//    // РћР±СЂР°Р±РѕС‚РєР° РєР»РёРєР° РјС‹С€СЊСЋ РїРѕ РЅР°РґРїРёСЃСЏРј
+//    // Обработка клика мышью по надписям
 //    if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
 //        double mx, my;
 //        int w, h;
@@ -897,9 +947,9 @@
 //    }
 //}
 //
-//void renderGame(primprog, texture, VAO_bg) {
+//void renderGame(unsigned int primprog, unsigned int texture, unsigned int VAO_bg) {
 //
-//    glClear(GL_COLOR_BUFFER_BIT); // Р¤РѕРЅ
+//    glClear(GL_COLOR_BUFFER_BIT); // Фон
 //    glUseProgram(primprog);
 //    glBindTexture(GL_TEXTURE_2D, texture);
 //    glBindVertexArray(VAO_bg);
@@ -909,7 +959,7 @@
 //{
 //    gameState = STATE_MENU;
 //    loadHighscores("scores.txt");
-//    glfwInit(); // РЎРѕР·РґР°РЅРёРµ РєРѕРЅС‚РµРєСЃС‚Р° opengl
+//    glfwInit(); // Создание контекста opengl
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
 //    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 //    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
@@ -928,7 +978,7 @@
 //        return -1;
 //    glViewport(0, 0, mode->width, mode->height);
 //
-//    mat4 model, view, projection; // Р‘Р»РѕРє РѕР±СЂР°Р±РѕС‚РєРё РєР°РјРµСЂС‹
+//    mat4 model, view, projection; // Блок обработки камеры
 //    glm_mat4_identity(model);
 //
 //    glm_perspective(glm_rad(45.0f), (float)(mode->width) / (float)(mode->height), 0.1f, 100.0f, projection);
@@ -938,7 +988,7 @@
 //    vec3 up = { 0.0f, 1.0f, 1.0f };
 //    glm_lookat(eye, center, up, view);
 //
-//    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); // Р‘Р»РѕРє РєРѕРјРїР»РёР»СЏС†РёРё С€РµР№РґРµСЂРѕРІ
+//    unsigned int vs = glCreateShader(GL_VERTEX_SHADER); // Блок комплиляции шейдеров
 //    glShaderSource(vs, 1, &vertexShaderSource, NULL);
 //    glCompileShader(vs);
 //    unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
@@ -980,8 +1030,8 @@
 //    glLinkProgram(mprog);
 //    glDeleteShader(mvs);
 //    glDeleteShader(mfs);
-//    
-//    float backgroundVertices[] = { // Р‘СѓС„РµСЂ С„РѕРЅР° Рё РµРіРѕ РѕР±СЂР°Р±РѕС‚РєР°
+//
+//    float backgroundVertices[] = { // Буфер фона и его обработка
 //        1.0f, 1.0f, 0.0f, 1.0f, 1.0f,
 //        1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
 //        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
@@ -1016,7 +1066,7 @@
 //    glBindBuffer(GL_ARRAY_BUFFER, 0);
 //    glBindVertexArray(0);
 //
-//    float vb[] = { // Р‘СѓС„С„РµСЂ РїСѓР»Рё Рё РµРіРѕ РѕР±СЂР°Р±РѕС‚РєР°
+//    float vb[] = { // Буффер пули и его обработка
 //        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f,
 //        -0.005f, -0.07f, 0, 1.0f, 0.65f, 0.0f, 0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f, -0.005f, -0.03f, 0, 1.0f, 0.65f, 0.0f };
 //
@@ -1033,7 +1083,7 @@
 //    glBindBuffer(GL_ARRAY_BUFFER, 0);
 //    glBindVertexArray(0);
 //
-//    Model enemymodel; // Р—Р°РіСЂСѓР·РєР° РјРѕРґРµР»Рё РІСЂР°РіР°
+//    Model enemymodel; // Загрузка модели врага
 //    memset(&enemymodel, 0, sizeof(Model));
 //    loadObj("res/fighter.obj", &enemymodel, .05f, 0.2f, 1.0f, -0.3f, 0);
 //    unsigned int VBO_e, VAO_e;
@@ -1041,7 +1091,7 @@
 //    unsigned int enemytexture = loadTexture("res/fighter_texture.jpg");
 //
 //
-//    Model playermodel; //Р—Р°РіСЂСѓР·РєР° РјРѕРґРµР»Рё РёРіСЂРѕРєР°
+//    Model playermodel; //Загрузка модели игрока
 //    memset(&playermodel, 0, sizeof(Model));
 //    loadObj("res/SpaseShip.obj", &playermodel, .05f, -0.2f, 1.0f, -0.3f, 1);
 //    unsigned int VBO, VAO;
@@ -1059,8 +1109,24 @@
 //    glEnable(GL_BLEND);
 //    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 //
+//    // --- Инициализация времени для профилирования ---
+//    last_time = glfwGetTime();
+//    // --- /Инициализация времени для профилирования ---
+//
 //    while (!glfwWindowShouldClose(window))
 //    {
+//        // --- Измерение времени начала кадра ---
+//        double current_time = glfwGetTime();
+//        frame_time = current_time - last_time;
+//        last_time = current_time;
+//        if (frame_time > 0.0) {
+//            fps = 1.0 / frame_time;
+//        }
+//        else {
+//            fps = 0.0;
+//        }
+//        // --- /Измерение времени начала кадра ---
+//
 //        switch (gameState) {
 //        case STATE_MENU:
 //            renderMenu(window);
@@ -1069,22 +1135,26 @@
 //            break;
 //        case STATE_PLAYING:
 //            processInput(window, &x);
+//            // --- Измерение времени рендеринга ---
+//            double render_start_time = glfwGetTime();
 //            renderGame(primprog, texture, VAO_bg);
-//            updateEnemy(); // Р‘Р»РѕРє РѕР±СЂР°Р±РѕС‚РєРё РІСЂР°РіРѕРІ Рё РїСѓР»СЊ
+//            // --- /Измерение времени рендеринга ---
+//            updateEnemy(); // Блок обработки врагов и пуль
 //            updateBullets();
-//            for (int j = 0; j < MAX_ENEMIES; j++)
+//            int enemy_count = profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES; // Используем разное количество врагов
+//            for (int j = 0; j < enemy_count; j++)
 //                if (enemies[j].active && rand() % 500 == 0)
 //                    shootEnemyBullet(enemies[j].x, enemies[j].y, enemyShotInterval);
 //            updateEnemyMovement(x);
 //            diveAttack(x);
-//            for (int i = 0; i < MAX_ENEMIES; i++)
+//            for (int i = 0; i < enemy_count; i++)
 //                if (enemies[i].active && enemies[i].diving)
 //                    shootEnemyBullet(enemies[i].x, enemies[i].y, (enemyShotInterval / 2));
 //            checkDiveCollisions(x);
 //            updatePlayerHits(x);
 //            {
 //                int alive = 0;
-//                for (int i = 0; i < MAX_ENEMIES; i++)
+//                for (int i = 0; i < enemy_count; i++) // Используем разное количество врагов
 //                    if (enemies[i].active) alive++;
 //                if (alive == 0) {
 //                    score += baseWaveScore + wave * 100;
@@ -1098,7 +1168,7 @@
 //            }
 //            drawBullets(prog, VAO_b, model, view, projection);
 //
-//            glUseProgram(mprog); //Р‘Р»РѕРє РѕР±СЂР°Р±РѕС‚РєРё РёРіСЂРѕРєР°
+//            glUseProgram(mprog); //Блок обработки игрока
 //            int off = glGetUniformLocation(mprog, "offset");
 //            int hitLoc = glGetUniformLocation(mprog, "isHit");
 //
@@ -1124,13 +1194,37 @@
 //                spawnFormation();
 //                updateBullets();
 //            }
+//            // --- Отображение профилировочной информации ---
 //            char scoreText[64];
 //            sprintf(scoreText, "Score: %d", score);
 //            GLint prevDepthFunc;
 //            glGetIntegerv(GL_DEPTH_FUNC, &prevDepthFunc);
 //            glDepthFunc(GL_ALWAYS);
 //            renderText(scoreText, -0.95f, 0.9f, 1.0f);
+//
+//            char fpsText[32];
+//            sprintf(fpsText, "FPS: %.2f", fps);
+//            renderText(fpsText, -0.95f, 0.8f, 1.0f);
+//
+//            char frameTimeText[32];
+//            sprintf(frameTimeText, "Frame Time: %.2f ms", frame_time * 1000.0);
+//            renderText(frameTimeText, -0.95f, 0.7f, 1.0f);
+//
+//            char renderTimeText[32];
+//            render_time = (glfwGetTime() - render_start_time) * 1000.0; // Вычисляем время рендеринга
+//            sprintf(renderTimeText, "Render Time: %.2f ms", render_time);
+//            renderText(renderTimeText, -0.95f, 0.6f, 1.0f);
+//
+//            char modeText[64];
+//            sprintf(modeText, "Profiling: %s, Invulnerable: %s", profiling_mode ? "ON" : "OFF", invulnerable_mode ? "ON" : "OFF");
+//            renderText(modeText, -0.95f, 0.5f, 1.0f);
+//
+//            char enemyCountText[32];
+//            sprintf(enemyCountText, "Enemies: %d", profiling_mode ? PROFILING_MAX_ENEMIES : MAX_ENEMIES);
+//            renderText(enemyCountText, -0.95f, 0.4f, 1.0f);
+//
 //            glDepthFunc(prevDepthFunc);
+//            // --- /Отображение профилировочной информации ---
 //
 //            break;
 //        case STATE_CONTROLS:
@@ -1138,12 +1232,15 @@
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
-//        case STATE_HIGHSCORES: 
+//        case STATE_HIGHSCORES:
 //            renderHighscores(window);
 //            if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 //                glfwSetWindowShouldClose(window, 1);
 //            break;
 //        }
+//        // --- Измерение времени рендеринга (окончание) ---
+//        render_time = (glfwGetTime() - render_start_time) * 1000.0; // Обновляем render_time перед отображением
+//        // --- /Измерение времени рендеринга (окончание) ---
 //        glfwSwapBuffers(window);
 //        glfwPollEvents();
 //    }
